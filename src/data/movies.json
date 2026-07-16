@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1396,
+    "type": "tv",
+    "my_rating": "10",
+    "status": "watched",
+    "my_note": "Say my name."
+  },
+  {
+    "id": 32519,
+    "type": "tv",
+    "my_rating": "10",
+    "status": "watched",
+    "my_note": "Türk tarihinin en iyi yapımıdır."
+  },
+  {
+    "id": 60059,
+    "type": "tv",
+    "my_rating": "10",
+    "status": "watched",
+    "my_note": "Better Call Saul!"
+  },
+  {
+    "id": 497,
+    "type": "movie",
+    "my_rating": "9.5",
+    "status": "watched",
+    "my_note": ":("
+  },
+  {
+    "id": 550,
+    "type": "movie",
+    "my_rating": "9.1",
+    "status": "watched",
+    "my_note": "Dövüş kulübünün ilk kuralı..."
+  },
+  {
+    "id": 157336,
+    "type": "movie",
+    "my_rating": "-",
+    "status": "watchlist",
+    "my_note": "-"
+  }
+]

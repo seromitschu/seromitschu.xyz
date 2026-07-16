@@ -1,0 +1,383 @@
+---
+// src/layouts/Layout.astro
+import Navbar from '../components/Navbar.astro';
+import { getCollection } from 'astro:content';
+import Popup from '../components/Popup.astro';
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+
+const navigationItems = [
+  { name: 'Ana Sayfa', href: '/' },
+  { name: 'Geliştirme / Projeler', href: '/github' },
+  { name: 'Müzik Odası', href: '/music' },
+  { name: 'Galeri', href: '/gallery' },
+  { name: 'Oyun Odası', href: '/games' },
+  { name: 'Ziyaretçi Defteri', href: '/guestbook' },
+  { name: 'Blog', href: '/blog' },
+  { name: 'Sinema Odası', href: '/cinema' }
+];
+
+const blogPosts = await getCollection('blog');
+const sortedPosts = blogPosts.sort((a, b) => b.data.pubDate.valueOf() - a.data.pubDate.valueOf());
+
+const currentPath = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <main class="main-content">
+      <slot />
+    </main>
+    
+    <Navbar />
+    <Popup />
+    
+    <div class="custom-scroll-container">
+      <div class="custom-scroll-track" id="scrollTrack">
+        <div class="custom-scroll-thumb" id="scrollOrb">
+          <span class="orb-core"></span>
+          <span class="orb-glow"></span>
+        </div>
+      </div>
+    </div>
+
+    <div id="command-palette" class="palette-overlay" aria-hidden="true">
+      <div class="palette-window">
+        <div class="palette-search-wrapper">
+          <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="palette-input" placeholder="Yazın veya 'not: fikir' yazıp Enter'a basın..." autocomplete="off" />
+          <kbd class="palette-close-kbd">ESC</kbd>
+        </div>
+        
+        <div class="palette-results" id="palette-results">
+          <div class="palette-group" data-group="nav">Navigasyon</div>
+          {navigationItems.map((item, index) => {
+            const isActive = currentPath === item.href || (item.href !== '/' && currentPath.startsWith(item.href));
+            return (
+              <a href={item.href} class={`palette-item ${isActive ? 'active' : ''}`} data-index={index} data-text={item.name.toLowerCase()} data-group-parent="nav">
+                <span>{item.name}</span>
+                <kbd>↵</kbd>
+              </a>
+            );
+          })}
+
+          {sortedPosts.length > 0 && (
+            <>
+              <div class="palette-group" data-group="blog">Yazılar</div>
+              {sortedPosts.map((post, index) => {
+                const globalIndex = navigationItems.length + index;
+                const postHref = `/blog/${post.id}`;
+                const isActive = currentPath === postHref;
+                return (
+                  <a href={postHref} class={`palette-item post-item ${isActive ? 'active' : ''}`} data-index={globalIndex} data-text={`yazı makale post ${post.data.title.toLowerCase()} ${post.data.description.toLowerCase()}`} data-group-parent="blog">
+                    <span class="post-item-title">📝 {post.data.title}</span>
+                    <kbd>↵</kbd>
+                  </a>
+                );
+              })}
+            </>
+          )}
+
+          <div class="palette-group" data-group="system">Sistem</div>
+          <button class="palette-item" id="cmd-copy-url" data-index={navigationItems.length + sortedPosts.length} data-text="şu anki url'yi kopyala url kopyala copy link" data-group-parent="system">
+            <span>Şu anki URL'yi Kopyala</span>
+            <kbd>⌘C</kbd>
+          </button>
+
+          <button class="palette-item" id="cmd-view-notes" data-index={navigationItems.length + sortedPosts.length + 1} data-text="hafızadaki notları incele listele not defteri quick notes temizle" data-group-parent="system">
+            <span>Kayıtlı Notları İncele</span>
+            <kbd>⌘N</kbd>
+          </button>
+          
+          <div id="palette-no-results" class="palette-no-results" style="display: none;">
+            Eşleşen komut veya yazı bulunamadı...
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function initStartSequence() {
+        setTimeout(() => { document.body.classList.add('start-sequence'); }, 50);
+      }
+
+      let currentKeydownHandler: ((e: KeyboardEvent) => void) | null = null;
+      let currentCustomHandler: ((e: Event) => void) | null = null;
+      
+      function initCommandPalette() {
+        const palette = document.getElementById('command-palette');
+        const input = document.getElementById('palette-input') as HTMLInputElement | null;
+        const noResults = document.getElementById('palette-no-results');
+        let activeIndex = 0;
+        if (!palette || !input) return;
+
+        function getVisibleItems() {
+          return Array.from(document.querySelectorAll('.palette-item')).filter(item => (item as HTMLElement).style.display !== 'none');
+        }
+
+        function togglePalette(open?: boolean) {
+          if (!palette || !input) return;
+          const isHidden = palette.getAttribute('aria-hidden') === 'true';
+          const shouldOpen = open !== undefined ? open : isHidden;
+          if (shouldOpen) {
+            palette.setAttribute('aria-hidden', 'false');
+            palette.style.display = 'flex';
+            input.value = '';
+            
+            Array.from(document.querySelectorAll('.palette-item')).forEach(item => { (item as HTMLElement).style.display = 'flex'; });
+            Array.from(document.querySelectorAll('.palette-group')).forEach(group => { (group as HTMLElement).style.display = 'block'; });
+            if (noResults) noResults.style.display = 'none';
+            
+            setTimeout(() => input.focus(), 60);
+            
+            const visibleItems = getVisibleItems();
+            const currentActive = visibleItems.findIndex(item => item.classList.contains('active'));
+            updateActiveItem(currentActive !== -1 ? currentActive : 0);
+          } else {
+            palette.setAttribute('aria-hidden', 'true');
+            setTimeout(() => { if (palette.getAttribute('aria-hidden') === 'true') { palette.style.display = 'none'; } }, 250);
+          }
+        }
+
+        function updateActiveItem(index: number) {
+          const visibleItems = getVisibleItems();
+          if (visibleItems.length === 0) return;
+          if (index < 0) index = visibleItems.length - 1;
+          if (index >= visibleItems.length) index = 0;
+
+          Array.from(document.querySelectorAll('.palette-item')).forEach(item => item.classList.remove('active'));
+          visibleItems[index].classList.add('active');
+          activeIndex = index;
+          visibleItems[index].scrollIntoView({ block: 'nearest' });
+        }
+
+        input.addEventListener('input', () => {
+          const query = input.value.toLowerCase().trim();
+          if (query.startsWith('not:') || query.startsWith('note:')) return;
+
+          const allItems = Array.from(document.querySelectorAll('.palette-item'));
+          const groups = Array.from(document.querySelectorAll('.palette-group'));
+          const groupCounts: Record<string, number> = {};
+          
+          groups.forEach(g => { groupCounts[g.getAttribute('data-group') || ''] = 0; });
+          let hasMatch = false;
+
+          allItems.forEach(item => {
+            const text = item.getAttribute('data-text') || '';
+            const parentGroup = item.getAttribute('data-group-parent') || '';
+            if (text.includes(query)) {
+              (item as HTMLElement).style.display = 'flex';
+              hasMatch = true;
+              if (parentGroup) groupCounts[parentGroup]++;
+            } else {
+              (item as HTMLElement).style.display = 'none';
+              item.classList.remove('active');
+            }
+          });
+
+          groups.forEach(group => {
+            const id = group.getAttribute('data-group') || '';
+            (group as HTMLElement).style.display = groupCounts[id] === 0 ? 'none' : 'block';
+          });
+
+          if (noResults) noResults.style.display = hasMatch ? 'none' : 'block';
+          if (hasMatch) updateActiveItem(0);
+        });
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+          if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault(); e.stopPropagation(); togglePalette(); return;
+          }
+
+          const isOpen = palette.getAttribute('aria-hidden') === 'false';
+          if (!isOpen) return;
+
+          if (e.key === 'Escape') { e.preventDefault(); togglePalette(false); }
+          if (e.key === 'ArrowDown') { e.preventDefault(); updateActiveItem(activeIndex + 1); }
+          if (e.key === 'ArrowUp') { e.preventDefault(); updateActiveItem(activeIndex - 1); }
+
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            const value = input.value.trim();
+
+            if (value.toLowerCase().startsWith('not:') || value.toLowerCase().startsWith('note:')) {
+              const noteContent = value.replace(/^(not:|note:)\s*/i, '');
+              if (!noteContent) {
+                if ((window as any).showPopup) {
+                  (window as any).showPopup({ title: "Not Boş Olamaz", desc: "Lütfen 'not: fikir yazısı' şablonunu kullanın.", type: "info", icon: "⚠️" });
+                }
+                return;
+              }
+
+              const existingNotes = JSON.parse(localStorage.getItem('seromitschu_notes') || '[]');
+              existingNotes.push({ id: Date.now().toString(), text: noteContent, date: new Date().toLocaleString('tr-TR') });
+              localStorage.setItem('seromitschu_notes', JSON.stringify(existingNotes));
+
+              if ((window as any).showPopup) {
+                (window as any).showPopup({ title: "Fikir Sığınağa Atıldı", desc: `"${noteContent.substring(0, 24)}${noteContent.length > 24 ? '...' : ''}" yerel hafızaya işlendi.`, type: "info", icon: "📝", duration: 4000 });
+              }
+              input.value = ''; togglePalette(false); return;
+            }
+
+            const visibleItems = getVisibleItems();
+            if (visibleItems[activeIndex]) (visibleItems[activeIndex] as HTMLElement).click();
+          }
+        };
+
+        if (currentKeydownHandler) window.removeEventListener('keydown', currentKeydownHandler);
+        if (currentCustomHandler) document.removeEventListener('open-cmd-palette', currentCustomHandler);
+        
+        currentKeydownHandler = handleKeyDown;
+        currentCustomHandler = (e: Event) => { e.preventDefault(); e.stopPropagation(); togglePalette(); };
+        window.addEventListener('keydown', handleKeyDown);
+        document.addEventListener('open-cmd-palette', currentCustomHandler);
+
+        palette.addEventListener('click', (e) => { if (e.target === palette) { e.stopPropagation(); togglePalette(false); } });
+
+        Array.from(document.querySelectorAll('.palette-item')).forEach(item => { item.replaceWith(item.cloneNode(true)); });
+        Array.from(document.querySelectorAll('.palette-item')).forEach(item => {
+          item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const href = item.getAttribute('href');
+            if (href) { window.location.href = href; return; }
+
+            if (item.id === 'cmd-copy-url') {
+              navigator.clipboard.writeText(window.location.href);
+              if ((window as any).showPopup) {
+                (window as any).showPopup({ title: "Bağlantı Kopyalandı", desc: "Sanal adres panoya başarıyla kaydedildi.", type: "info", icon: "🔗", duration: 3500 });
+              }
+              setTimeout(() => togglePalette(false), 300);
+            } else if (item.id === 'cmd-view-notes') {
+              const notes = JSON.parse(localStorage.getItem('seromitschu_notes') || '[]');
+              if (notes.length === 0) {
+                if ((window as any).showPopup) {
+                  (window as any).showPopup({ title: "Hafıza Boş", desc: "Henüz 'not:' komutuyla eklenmiş bir fikir bulunamadı.", type: "info", icon: "📁", duration: 3500 });
+                }
+              } else {
+                const allNotesText = notes
+                  .map((n: any, index: number) => `• [${n.date.split(' ')[0]}] ${n.text}`)
+                  .join('\n\n');
+
+                if ((window as any).showPopup) {
+                  (window as any).showPopup({
+                    title: `Kayıtlı Fikirler (${notes.length})`,
+                    desc: allNotesText,
+                    type: "info",
+                    icon: "📋",
+                    duration: 15000,
+                    action: {
+                      label: "Hafızayı Sıfırla",
+                      callback: () => {
+                        localStorage.removeItem('seromitschu_notes');
+                        if ((window as any).showPopup) {
+                          (window as any).showPopup({ title: "Hafıza Temizlendi", desc: "Tüm yerel fikirler başarıyla silindi.", type: "info", icon: "🧹" });
+                        }
+                      }
+                    }
+                  });
+                }
+              }
+              setTimeout(() => togglePalette(false), 300);
+            }
+          });
+        });
+      }
+
+      function initScrollAnimations() {
+        const items = document.querySelectorAll('.animate-item');
+        if (items.length === 0) return;
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => { if (entry.isIntersecting) { (entry.target as HTMLElement).classList.add('is-visible'); observer.unobserve(entry.target); } });
+        }, { rootMargin: '0px 0px -40px 0px', threshold: 0.05 });
+        items.forEach((item) => { item.classList.remove('is-visible'); observer.observe(item); });
+      }
+
+      function initCustomScrollbar() {
+        const orb = document.getElementById('scrollOrb');
+        const track = document.getElementById('scrollTrack');
+        if (!orb || !track) return;
+        let lastScrollTop = 0, velTimeout: any, fadeTimeout: any;
+        
+        window.addEventListener('scroll', () => {
+          const scrollTop = window.scrollY;
+          const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+          if (docHeight <= 0) return;
+          track!.classList.add('is-scrolling');
+          const trackHeight = track!.clientHeight - orb!.clientHeight;
+          orb!.style.top = `${(scrollTop / docHeight) * trackHeight}px`;
+          
+          orb!.style.height = `${28 + Math.min(Math.abs(scrollTop - lastScrollTop) * 1.5, 80)}px`;
+          lastScrollTop = scrollTop;
+          clearTimeout(velTimeout); velTimeout = setTimeout(() => { if (orb) orb.style.height = '28px'; }, 80);
+          clearTimeout(fadeTimeout); fadeTimeout = setTimeout(() => { if (track && !track.matches(':hover')) track.classList.remove('is-scrolling'); }, 1000);
+        });
+
+        let isDragging = false, startY = 0, startScrollTop = 0;
+        orb.addEventListener('mousedown', (e) => { isDragging = true; startY = e.clientY; startScrollTop = window.scrollY; document.body.style.userSelect = 'none'; track!.classList.add('is-scrolling'); clearTimeout(fadeTimeout); });
+        document.addEventListener('mousemove', (e) => { if (!isDragging) return; const deltaY = e.clientY - startY, trackHeight = track!.clientHeight - orb!.clientHeight, docHeight = document.documentElement.scrollHeight - window.innerHeight; window.scrollTo(0, startScrollTop + (deltaY / trackHeight) * docHeight); });
+        document.addEventListener('mouseup', () => { if (!isDragging) return; isDragging = false; document.body.style.userSelect = ''; fadeTimeout = setTimeout(() => { track!.classList.remove('is-scrolling'); }, 1000); });
+      }
+
+      const setupEverything = () => { initStartSequence(); initCommandPalette(); initScrollAnimations(); initCustomScrollbar(); };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setupEverything); else setupEverything();
+      document.addEventListener('astro:page-load', setupEverything);
+    </script>
+  </body>
+</html>
+
+<style is:global>
+  html { scrollbar-width: none; }
+  html::-webkit-scrollbar { display: none; }
+  .custom-scroll-container { position: fixed; top: 0; right: 0; width: 24px; height: 100vh; z-index: 99999; display: flex; justify-content: center; align-items: center; }
+  .custom-scroll-track { width: 12px; height: 92vh; background: transparent; border-radius: 30px; position: relative; opacity: 0; pointer-events: none; transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s ease; }
+  .custom-scroll-track.is-scrolling, .custom-scroll-container:hover .custom-scroll-track { opacity: 1; pointer-events: auto; }
+  .custom-scroll-container:hover .custom-scroll-track { background: rgba(255, 255, 255, 0.01); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .custom-scroll-thumb { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 5px; height: 28px; border-radius: 30px; cursor: pointer; display: flex; justify-content: center; align-items: center; background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: inset 0 1px 2px rgba(255, 255, 255, 0.2); transition: height 0.12s ease-out, width 0.3s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s; }
+  .custom-scroll-container:hover .custom-scroll-thumb { width: 8px; background: rgba(255, 255, 255, 0.7); border-color: rgba(255, 255, 255, 0.4); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), inset 0 1px 3px rgba(255, 255, 255, 0.4); }
+  .orb-core { width: 100%; height: 100%; background: rgba(255, 255, 255, 0.85); border-radius: inherit; }
+  .orb-glow { position: absolute; width: 24px; height: 24px; background: #ffffff; filter: blur(12px); opacity: 0; pointer-events: none; border-radius: 50%; transition: opacity 0.3s ease; }
+  .custom-scroll-container:hover .orb-glow { opacity: 0.25; }
+  .palette-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(11, 11, 12, 0.4); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 9999; display: none; justify-content: center; padding-top: 15vh; opacity: 0; pointer-events: none; transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+  .palette-overlay[aria-hidden="false"] { opacity: 1; pointer-events: auto; }
+  .palette-window { background: rgba(18, 18, 20, 0.75); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; width: 100%; max-width: 540px; height: max-content; max-height: 380px; box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5); display: flex; flex-direction: column; overflow: hidden; transform: translateY(-12px); transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+  .palette-overlay[aria-hidden="false"] .palette-window { transform: translateY(0); }
+  .palette-search-wrapper { display: flex; align-items: center; padding: 0 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.06); gap: 12px; }
+  .search-icon { color: rgba(255, 255, 255, 0.35); }
+  #palette-input { flex: 1; background: transparent; border: none; outline: none; color: #ffffff; font-size: 0.95rem; height: 52px; font-family: inherit; }
+  #palette-input::placeholder { color: rgba(255, 255, 255, 0.3); }
+  .palette-close-kbd { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.4); border-radius: 4px; padding: 2px 6px; font-size: 0.65rem; }
+  .palette-results { padding: 8px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, 0.15) transparent; display: flex; flex-direction: column; gap: 2px; }
+  .palette-results::-webkit-scrollbar { width: 6px; }
+  .palette-results::-webkit-scrollbar-track { background: transparent; }
+  .palette-results::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.05); transition: background 0.2s ease; }
+  .palette-results::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.45); box-shadow: 0 0 8px rgba(255, 255, 255, 0.2); }
+  .palette-group { font-size: 0.7rem; color: rgba(255, 255, 255, 0.25); padding: 12px 12px 6px 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .palette-item { display: flex; align-items: center; justify-content: space-between; width: 100%; background: transparent; border: none; border-radius: 6px; padding: 10px 12px; color: rgba(255, 255, 255, 0.65); text-decoration: none; font-size: 0.9rem; text-align: left; cursor: pointer; transition: background 0.15s ease, color 0.15s ease; flex-shrink: 0; }
+  .palette-item kbd { opacity: 0; color: rgba(255, 255, 255, 0.35); font-size: 0.75rem; }
+  .palette-item.active { background: rgba(255, 255, 255, 0.06); color: #ffffff; }
+  .palette-item.active kbd { opacity: 1; }
+  .post-item-title { text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 440px; }
+  .palette-no-results { padding: 24px; text-align: center; color: rgba(255, 255, 255, 0.3); font-size: 0.85rem; }
+  :root { --bg-color: #0b0b0c; --text-primary: #f5f5f7; --text-secondary: #86868b; --apple-card-bg: rgba(22, 22, 24, 0.6); --apple-border: rgba(255, 255, 255, 0.08); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background-color: var(--bg-color); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; min-height: 100vh; overflow-x: hidden; }
+  .main-content { max-width: 1000px; margin: 0 auto; padding: 4rem 2rem 8rem 2rem; }
+  .animate-item { opacity: 0; transform: translateY(24px); will-change: opacity, transform; transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1); }
+  .animate-item.is-visible { opacity: 1; transform: translateY(0); }
+  .page-title { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.03em; margin-bottom: 0.5rem; background: linear-gradient(180deg, #ffffff 0%, #a1a1a6 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .page-desc { color: var(--text-secondary); font-size: 1.1rem; margin-bottom: 3rem; }
+  @media (max-width: 768px) { .main-content { padding: 2rem 1rem 6rem 1rem; } .page-title { font-size: 2rem; } .custom-scroll-container { display: none; } }
+</style>

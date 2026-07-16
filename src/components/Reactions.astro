@@ -1,0 +1,298 @@
+---
+// src/components/Reactions.astro
+interface Props {
+  contentId?: string;
+}
+
+const { contentId } = Astro.props;
+
+const supabaseUrl = 'https://brfcnnlvrywtplfacwcv.supabase.co';
+const supabaseAnonKey = 'sb_publishable_fAWMggTPsfco2IhadpQFJQ_rdm5LsA9';
+---
+
+<div 
+  class="reactions-wrapper liquid-glass-card" 
+  data-content-id={contentId}
+  data-sb-url={supabaseUrl}
+  data-sb-key={supabaseAnonKey}
+>
+  <p class="reactions-title">Bu içeriği nasıl buldun?</p>
+  
+  <div class="reactions-buttons">
+    <button class="reaction-btn" data-type="like" aria-label="Kalp">
+      <span class="emoji">❤️</span>
+      <span class="count" id="count-like">0</span>
+    </button>
+
+    <button class="reaction-btn" data-type="thumbs_up" aria-label="Beğen">
+      <span class="emoji">👍</span>
+      <span class="count" id="count-thumbs-up">0</span>
+    </button>
+
+    <button class="reaction-btn" data-type="thumbs_down" aria-label="Beğenme">
+      <span class="emoji">👎</span>
+      <span class="count" id="count-thumbs-down">0</span>
+    </button>
+
+    <button class="reaction-btn" data-type="applause" aria-label="Alkış">
+      <span class="emoji">👏</span>
+      <span class="count" id="count-applause">0</span>
+    </button>
+
+    <button class="reaction-btn" data-type="rocket" aria-label="Roket">
+      <span class="emoji">🚀</span>
+      <span class="count" id="count-rocket">0</span>
+    </button>
+
+    <button class="reaction-btn" data-type="smile" aria-label="Gülen Yüz">
+      <span class="emoji">😄</span>
+      <span class="count" id="count-smile">0</span>
+    </button>
+
+    <button class="reaction-btn" data-type="sad" aria-label="Üzgün Surat">
+      <span class="emoji">😢</span>
+      <span class="count" id="count-sad">0</span>
+    </button>
+
+    <button class="reaction-btn" data-type="angry" aria-label="Kızgın Surat">
+      <span class="emoji">😡</span>
+      <span class="count" id="count-angry">0</span>
+    </button>
+  </div>
+</div>
+
+<script is:inline>
+  function initReactions() {
+    const wrapper = document.querySelector('.reactions-wrapper');
+    if (!wrapper) return;
+
+    const contentId = wrapper.getAttribute('data-content-id') || window.location.pathname;
+    const sbUrl = wrapper.getAttribute('data-sb-url');
+    const sbKey = wrapper.getAttribute('data-sb-key');
+
+    if (!contentId || !sbUrl || !sbKey) return;
+
+    if (typeof window.supabase === 'undefined') {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      script.onload = () => setupSupabase(contentId, sbUrl, sbKey);
+      document.head.appendChild(script);
+    } else {
+      setupSupabase(contentId, sbUrl, sbKey);
+    }
+  }
+
+  async function setupSupabase(contentId, sbUrl, sbKey) {
+    const supabase = window.supabase.createClient(sbUrl, sbKey);
+
+    function updateDOM(data) {
+      if (!data) return;
+      
+      const elMap = {
+        'like': document.getElementById('count-like'),
+        'thumbs_up': document.getElementById('count-thumbs-up'),
+        'thumbs_down': document.getElementById('count-thumbs-down'),
+        'applause': document.getElementById('count-applause'),
+        'rocket': document.getElementById('count-rocket'),
+        'smile': document.getElementById('count-smile'),
+        'sad': document.getElementById('count-sad'),
+        'angry': document.getElementById('count-angry')
+      };
+
+      if (elMap.like) elMap.like.textContent = data.like_count ?? 0;
+      if (elMap.thumbs_up) elMap.thumbs_up.textContent = data.thumbs_up_count ?? 0;
+      if (elMap.thumbs_down) elMap.thumbs_down.textContent = data.thumbs_down_count ?? 0;
+      if (elMap.applause) elMap.applause.textContent = data.applause_count ?? 0;
+      if (elMap.rocket) elMap.rocket.textContent = data.rocket_count ?? 0;
+      if (elMap.smile) elMap.smile.textContent = data.smile_count ?? 0;
+      if (elMap.sad) elMap.sad.textContent = data.sad_count ?? 0;
+      if (elMap.angry) elMap.angry.textContent = data.angry_count ?? 0;
+    }
+
+    // İlk verileri çek
+    try {
+      const { data: reactionData } = await supabase
+        .from('reactions')
+        .select('*')
+        .eq('content_id', contentId)
+        .single();
+
+      if (reactionData) updateDOM(reactionData);
+    } catch (e) {
+      console.warn("İlk veri çekilirken hata oluştu (Önemli değil):", e);
+    }
+
+    // Realtime Dinleyici
+    supabase
+      .channel(`public:reactions:content_id=eq.${contentId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'reactions', filter: `content_id=eq.${contentId}` }, (payload) => {
+        updateDOM(payload.new);
+      })
+      .subscribe();
+
+    // Buton Dinleyicileri
+    const originalButtons = document.querySelectorAll('.reaction-btn');
+    originalButtons.forEach(btn => {
+      const newBtn = btn.cloneNode(true);
+      btn.parentNode.replaceChild(newBtn, btn);
+
+      const type = newBtn.getAttribute('data-type');
+      if (!type) return;
+
+      const localKey = `reacted_${contentId}_${type}`;
+
+      if (localStorage.getItem(localKey) === 'true') {
+        newBtn.classList.add('voted');
+      }
+
+      newBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (localStorage.getItem(localKey) === 'true') {
+          if (window.showPopup) {
+            window.showPopup("Zaten Oy Verdin", "Bu tepkiyi daha önce kullandınız.", "👀");
+          }
+          return;
+        }
+
+        newBtn.classList.add('pulse-active');
+        setTimeout(() => newBtn.classList.remove('pulse-active'), 400);
+
+        localStorage.setItem(localKey, 'true');
+        newBtn.classList.add('voted');
+
+        // RPC çağrısı parametre isimleri SQL ile birebir örtüşüyor
+        const { error } = await supabase.rpc('increment_reaction', {
+          target_content_id: contentId,
+          reaction_type: type
+        });
+
+        if (error) {
+          console.error("Supabase RPC Detaylı Hata Gövdesi:", error);
+          localStorage.removeItem(localKey);
+          newBtn.classList.remove('voted');
+          if (window.showPopup) {
+            window.showPopup("Bağlantı Sorunu", "Tepki iletilirken bir sorun oluştu.", "⚠️");
+          }
+        } else {
+          if (window.showPopup) {
+            window.showPopup("Tepki İletildi", "Fikirlerin benim için değerli, teşekkürler.", "✏️");
+          }
+        }
+      });
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', initReactions);
+  document.addEventListener('astro:page-load', initReactions);
+</script>
+
+<style>
+  .reactions-wrapper {
+    background: rgba(22, 22, 24, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 
+      0 30px 60px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    border-radius: 20px;
+    padding: 20px;
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    max-width: 100%;
+    margin: 4rem auto;
+  }
+
+  .reactions-title {
+    color: #86868b;
+    font-size: 0.8rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  .reactions-buttons {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .reaction-btn {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: 
+      background 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+      border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+      opacity 0.2s ease,
+      transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    user-select: none;
+    -webkit-user-select: none;
+    flex-shrink: 0;
+  }
+
+  .reaction-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .reaction-btn.voted {
+    opacity: 0.6;
+    background: rgba(255, 255, 255, 0.01);
+    border-color: rgba(255, 255, 255, 0.02);
+  }
+
+  .reaction-btn.pulse-active {
+    transform: scale(0.85);
+  }
+
+  .emoji {
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .count {
+    color: #f5f5f7;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  @media (max-width: 640px) {
+    .reactions-wrapper {
+      padding: 16px 12px;
+    }
+    
+    .reactions-buttons {
+      justify-content: flex-start;
+      overflow-x: auto;
+      padding-bottom: 8px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      flex-wrap: nowrap;
+    }
+
+    .reactions-buttons::-webkit-scrollbar {
+      display: none;
+    }
+
+    .reaction-btn {
+      padding: 6px 10px;
+      gap: 4px;
+    }
+    
+    .emoji { font-size: 0.95rem; }
+    .count { font-size: 0.75rem; }
+  }
+</style>

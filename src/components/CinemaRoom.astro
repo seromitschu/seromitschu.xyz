@@ -1,0 +1,537 @@
+---
+// src/components/CinemaRoom.astro
+import localMovies from '../data/movies.json';
+
+const TMDB_API_KEY = import.meta.env.TMDB_API_KEY;
+
+async function fetchMediaDetails(item) {
+  const baseUrl = "https://api.themoviedb.org/3";
+  const detailsUrl = `${baseUrl}/${item.type}/${item.id}?api_key=${TMDB_API_KEY}&language=tr-TR`;
+  const videosUrl = `${baseUrl}/${item.type}/${item.id}/videos?api_key=${TMDB_API_KEY}`;
+  
+  try {
+    const [detailsRes, videosRes] = await Promise.all([
+      fetch(detailsUrl),
+      fetch(videosUrl)
+    ]);
+    
+    if (!detailsRes.ok) throw new Error(`TMDB Detay Hatası: ${detailsRes.status}`);
+    const data = await detailsRes.json();
+    
+    let trailerKey = "";
+    if (videosRes.ok) {
+      const videoData = await videosRes.json();
+      const trailer = videoData.results?.find(v => v.site === "YouTube" && v.type === "Trailer") ||
+                      videoData.results?.find(v => v.site === "YouTube");
+      if (trailer) {
+        trailerKey = trailer.key;
+      }
+    }
+    
+    return {
+      id: item.id,
+      title: data.title || data.name,
+      overview: data.overview || "Bu yapım için Türkçe özet bulunamadı.",
+      poster: data.poster_path ? `https://image.tmdb.org/t/p/w500${data.poster_path}` : '/logos/default-movie.jpg',
+      backdrop: data.backdrop_path ? `https://image.tmdb.org/t/p/w1280${data.backdrop_path}` : '',
+      release_date: data.release_date || data.first_air_date || 'Bilinmiyor',
+      genres: data.genres ? data.genres.map(g => g.name).slice(0, 2) : [],
+      type: item.type,
+      status: item.status,
+      my_rating: item.my_rating,
+      my_note: item.my_note,
+      trailer_key: trailerKey,
+      current_episode: item.current_episode || 0,
+      total_episodes: item.total_episodes || 0
+    };
+  } catch (error) {
+    console.error(`ID ${item.id} çekilemedi:`, error);
+    return null;
+  }
+}
+
+const rawMedia = await Promise.all(localMovies.map(fetchMediaDetails));
+const mediaItems = rawMedia.filter(item => item !== null);
+
+const totalWatched = mediaItems.filter(i => i.status === 'watched').length;
+const currentlyWatching = mediaItems.filter(i => i.status === 'watching');
+const watchListCount = mediaItems.filter(i => i.status === 'watchlist').length;
+
+const allGenres = mediaItems.flatMap(i => i.genres);
+const favoriteGenre = allGenres.sort((a, b) => 
+  allGenres.filter(v => v === a).length - allGenres.filter(v => v === b).length
+).pop() || "Sinema";
+---
+
+<script src="https://www.youtube.com/iframe_api" async is:inline></script>
+
+<div class="cinema-page-wrapper">
+    <section class="cinema-section word delay-3">
+        
+        <div class="cinema-header-block">
+            <h2 class="section-title">İzleme Günlüğü & Kitaplık</h2>
+        </div>
+        
+        <div class="top-dashboard-wrapper">
+            <div class="stats-bento-grid">
+                <div class="stat-card liquid-glass-effect">
+                    <span class="stat-value">{totalWatched}</span>
+                    <span class="stat-label">Bitirilen Yapım</span>
+                </div>
+                <div class="stat-card liquid-glass-effect">
+                    <span class="stat-value">{watchListCount}</span>
+                    <span class="stat-label">İstek Listesi</span>
+                </div>
+                <div class="stat-card liquid-glass-effect favori-tur">
+                    <span class="stat-label">Favori Tür: <strong class="text-glow">{favoriteGenre}</strong></span>
+                </div>
+            </div>
+
+            {currentlyWatching.length > 0 ? (
+                <div class="live-watching-container">
+                    <div class="live-badge-wrapper">
+                        <span class="pulse-dot"></span>
+                        <span class="live-text">ŞU AN NE İZLİYORUM</span>
+                    </div>
+                    {currentlyWatching.map((live) => (
+                        <div class="live-card liquid-glass-effect media-trigger-btn" data-media={JSON.stringify(live)}>
+                            <div class="live-backdrop-blur" style={`background-image: url(${live.backdrop});`}></div>
+                            <div class="live-content">
+                                <div class="live-poster-area">
+                                    <img src={live.poster} alt={live.title} class="live-poster" />
+                                    {live.trailer_key && (
+                                        <div class="hover-video-container">
+                                            <div class="yt-player-placeholder" data-video-id={live.trailer_key}></div>
+                                        </div>
+                                    )}
+                                </div>
+                                <div class="live-info">
+                                    <h3 class="live-title">{live.title}</h3>
+                                    <p class="live-note">"{live.my_note}"</p>
+                                    
+                                    {live.type === 'tv' && live.total_episodes > 0 && (
+                                        <div class="progress-container">
+                                            <div class="progress-text">
+                                                <span>Bölüm: {live.current_episode} / {live.total_episodes}</span>
+                                                <span>%{Math.round((live.current_episode / live.total_episodes) * 100)}</span>
+                                            </div>
+                                            <div class="progress-bar-bg">
+                                                <div class="progress-bar-fill" style={`width: ${(live.current_episode / live.total_episodes) * 100}%`}></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <div class="live-watching-container">
+                    <div class="live-badge-wrapper no-live">
+                        <span class="sleep-dot"></span>
+                        <span class="live-text">ŞU AN NE İZLİYORUM</span>
+                    </div>
+                    <div class="live-card liquid-glass-effect empty-live-card">
+                        <div class="empty-live-content">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="empty-icon"><path d="M2 8a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8Z"/><path d="M6 21h12"/><path d="M10 17v4"/><path d="M14 17v4"/></svg>
+                            <p class="empty-text">Şu sıralar aktif olarak izlediğim bir dizi veya film bulunmuyor.</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+
+        <div class="bento-seamless-grid">
+            {mediaItems.filter(i => i.status !== 'watching').map((item) => (
+                <div class="bento-node liquid-glass-effect bento-hover-media" data-media={JSON.stringify(item)}>
+                    <div class="media-poster-wrapper media-trigger-btn" data-media={JSON.stringify(item)}>
+                        <img src={item.poster} alt={item.title} class="media-poster" loading="lazy" />
+                        
+                        {item.backdrop && (
+                            <img src={item.backdrop} alt={`${item.title} Banner`} class="media-banner-hover" loading="lazy" />
+                        )}
+                        
+                        {item.trailer_key && (
+                            <div class="hover-video-container">
+                                <div class="yt-player-placeholder" data-video-id={item.trailer_key}></div>
+                            </div>
+                        )}
+                        
+                        <span class="type-badge">{item.type === 'tv' ? 'Dizi' : 'Film'}</span>
+
+                        {item.status === 'watchlist' && (
+                            <div class="status-icon-wrapper watchlist-badge" title="İstek Listesinde">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="svg-ico"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+                            </div>
+                        )}
+                        {item.status === 'watched' && (
+                            <div class="status-icon-wrapper watched-badge" title="Bitirildi">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" class="svg-ico"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            </div>
+                        )}
+                    </div>
+                    <div class="media-info media-trigger-btn" data-media={JSON.stringify(item)}>
+                        <div class="media-title-row">
+                            <h3 class="media-title">{item.title}</h3>
+                            <span class="media-rating">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="inline-star"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                                {item.my_rating}
+                            </span>
+                        </div>
+                        <div class="genre-pills">
+                            {item.genres.map(g => <span class="genre-pill">{g}</span>)}
+                        </div>
+                        <p class="media-note">{item.my_note}</p>
+                    </div>
+                </div>
+            ))}
+        </div>
+    </section>
+</div>
+
+<div id="cinema-modal" class="cinema-modal-overlay hidden">
+    <div class="cinema-modal-card liquid-glass-effect">
+        <button id="close-modal-btn" class="close-btn" aria-label="Kapat">✕</button>
+        <div id="modal-backdrop-hero" class="modal-hero"></div>
+        <div class="modal-body">
+            <div class="modal-left">
+                <img id="modal-poster" src="" alt="Poster" />
+            </div>
+            <div class="modal-right">
+                <div class="modal-header-row">
+                    <h2 id="modal-title">Film Adı</h2>
+                    <span id="modal-rating" class="modal-rating-badge">⭐ 10</span>
+                </div>
+                <div id="modal-genres" class="genre-pills"></div>
+                <p id="modal-overview" class="modal-overview-text">TMDB Özeti...</p>
+                <div class="modal-divider"></div>
+                <div class="modal-user-review">
+                    <h4>Kişisel Notum:</h4>
+                    <p id="modal-user-note">Yorum...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- AKILLI VE GÜVENLİ FOOTER DARALTMA SİSTEMİ ---
+    const adjustExternalFooter = () => {
+        const footer = document.querySelector('footer, .footer-container, .footer-wrapper');
+        if (footer) {
+            (footer as HTMLElement).style.maxWidth = '800px';
+            (footer as HTMLElement).style.width = '100%';
+            (footer as HTMLElement).style.marginLeft = 'auto';
+            (footer as HTMLElement).style.marginRight = 'auto';
+        }
+    };
+    
+    document.addEventListener('DOMContentLoaded', adjustExternalFooter);
+    adjustExternalFooter();
+
+    // --- TRAILER PLAYER VE MODAL MANTIĞI ---
+    let ytPlayers = new Map();
+    (window as any).onYouTubeIframeAPIReady = () => {
+        const placeholders = document.querySelectorAll('.yt-player-placeholder');
+        placeholders.forEach((el, index) => {
+            const videoId = el.getAttribute('data-video-id');
+            const playerId = `yt-player-${index}`;
+            el.setAttribute('id', playerId);
+
+            const player = new (window as any).YT.Player(playerId, {
+                videoId: videoId,
+                playerVars: {
+                    autoplay: 0,
+                    controls: 0,
+                    disablekb: 1,
+                    fs: 0,
+                    rel: 0,
+                    showinfo: 0,
+                    iv_load_policy: 3,
+                    modestbranding: 1,
+                    loop: 1,
+                    playlist: videoId,
+                    mute: 1 
+                },
+                events: {
+                    onReady: (event) => { event.target.mute(); }
+                }
+            });
+
+            const parentCard = el.closest('.bento-hover-media') || el.closest('.live-card');
+            if (parentCard) {
+                ytPlayers.set(parentCard, player);
+                
+                parentCard.addEventListener('mouseenter', () => {
+                    const activePlayer = ytPlayers.get(parentCard);
+                    if (activePlayer && typeof activePlayer.playVideo === 'function') {
+                        activePlayer.playVideo();
+                        parentCard.querySelector('.hover-video-container')?.classList.add('active');
+                    }
+                });
+
+                parentCard.addEventListener('mouseleave', () => {
+                    const activePlayer = ytPlayers.get(parentCard);
+                    if (activePlayer && typeof activePlayer.pauseVideo === 'function') {
+                        activePlayer.pauseVideo();
+                        activePlayer.seekTo(0, true);
+                        parentCard.querySelector('.hover-video-container')?.classList.remove('active');
+                    }
+                });
+            }
+        });
+    };
+
+    const triggerButtons = document.querySelectorAll('.media-trigger-btn');
+    const modal = document.getElementById('cinema-modal');
+    const closeBtn = document.getElementById('close-modal-btn');
+
+    const mTitle = document.getElementById('modal-title');
+    const mPoster = document.getElementById('modal-poster') as HTMLImageElement;
+    const mBackdrop = document.getElementById('modal-backdrop-hero');
+    const mRating = document.getElementById('modal-rating');
+    const mGenres = document.getElementById('modal-genres');
+    const mOverview = document.getElementById('modal-overview');
+    const mUserNote = document.getElementById('modal-user-note');
+
+    triggerButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            if((e.target as HTMLElement).closest('.hover-video-container')) return;
+
+            const mediaData = JSON.parse(btn.getAttribute('data-media'));
+            
+            if(mTitle) mTitle.textContent = mediaData.title;
+            if(mPoster) mPoster.src = mediaData.poster;
+            if(mBackdrop) mBackdrop.style.backgroundImage = `url(${mediaData.backdrop})`;
+            if(mRating) mRating.textContent = `⭐ ${mediaData.my_rating}`;
+            if(mOverview) mOverview.textContent = mediaData.overview;
+            if(mUserNote) mUserNote.textContent = mediaData.my_note;
+            
+            if(mGenres) {
+                mGenres.innerHTML = '';
+                mediaData.genres.forEach(g => {
+                    const span = document.createElement('span');
+                    span.className = 'genre-pill';
+                    span.textContent = g;
+                    mGenres.appendChild(span);
+                });
+            }
+
+            modal?.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        });
+    });
+
+    closeBtn?.addEventListener('click', closeModal);
+    modal?.addEventListener('click', (e) => { if(e.target === modal) closeModal(); });
+
+    function closeModal() {
+        modal?.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+</script>
+
+<style>
+    .cinema-page-wrapper {
+        max-width: 840px;
+        width: 100%;
+        margin: 0 auto;
+        padding: 0 clamp(1.2rem, 5vw, 1.5rem);
+        box-sizing: border-box;
+    }
+
+    .cinema-section {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 1.8rem;
+        box-sizing: border-box;
+    }
+
+    .cinema-header-block .section-title { 
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68rem; 
+        text-transform: uppercase; 
+        letter-spacing: 0.2em; 
+        font-weight: 700; 
+        color: #444446;
+        margin: 0;
+    }
+    .top-dashboard-wrapper {
+        display: grid;
+        grid-template-columns: 1.2fr 2fr;
+        gap: 1rem;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .stats-bento-grid { 
+        display: grid;
+        grid-template-columns: 1fr 1fr; 
+        gap: 1rem; 
+    }
+    .stat-card { background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.04); padding: 1.2rem; border-radius: 14px; display: flex; flex-direction: column; justify-content: center; }
+    .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 1.6rem; font-weight: 700; color: #f5f5f7; }
+    .stat-label { font-size: 0.78rem; color: #86868b; margin-top: 0.2rem; }
+    .favori-tur { grid-column: span 2; flex-direction: row; justify-content: flex-start; align-items: center; gap: 0.2rem; }
+    .text-glow { color: #f5f5f7; }
+
+    .live-watching-container { display: flex; flex-direction: column; gap: 0.6rem; width: 100%; box-sizing: border-box; }
+    .live-badge-wrapper { display: flex; align-items: center; gap: 0.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; letter-spacing: 0.05em; color: #1DB954; font-weight: 700; }
+    .pulse-dot { width: 7px; height: 7px; background-color: #1DB954; border-radius: 50%; animation: pulse 1.6s infinite ease-in-out; }
+    @keyframes pulse {
+        0% { transform: scale(0.9); opacity: 0.6; box-shadow: 0 0 0 0 rgba(29, 185, 84, 0.5); }
+        50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 0 8px rgba(29, 185, 84, 0); }
+        100% { transform: scale(0.9); opacity: 0.6; box-shadow: 0 0 0 0 rgba(29, 185, 84, 0); }
+    }
+    .live-card { position: relative; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.06); overflow: hidden; padding: 1.5rem; cursor: pointer; background: rgba(10, 10, 10, 0.4); transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); height: 100%; box-sizing: border-box; }
+    .live-card:hover { transform: translateY(-2px); }
+    .live-backdrop-blur { position: absolute; inset: 0; background-size: cover; background-position: center 20%; filter: blur(40px) brightness(0.25); opacity: 0.65; z-index: 1; pointer-events: none; }
+    .live-content { position: relative; z-index: 2; display: flex; gap: 1.5rem; align-items: center; }
+    
+    .live-poster-area { position: relative; width: 75px; aspect-ratio: 2/3; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 20px rgba(0,0,0,0.5); flex-shrink: 0; }
+    .live-poster { width: 100%; height: 100%; object-fit: cover; }
+
+    .live-info { display: flex; flex-direction: column; gap: 0.4rem; flex-grow: 1; }
+    .live-title { font-size: 1.2rem; font-weight: 700; color: #f5f5f7; margin: 0; }
+    .live-note { font-size: 0.85rem; color: #aeaeb2; margin: 0; line-height: 1.4; }
+
+    .progress-container { margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.3rem; }
+    .progress-text { display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: #86868b; }
+    .progress-bar-bg { width: 100%; height: 5px; background: rgba(255,255,255,0.06); border-radius: 10px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: #1DB954; border-radius: 10px; box-shadow: 0 0 8px rgba(29, 185, 84, 0.4); }
+
+    /* BOŞ DURUM (EMPTY STATE) STİLLERİ */
+    .live-badge-wrapper.no-live { color: #86868b; }
+    .sleep-dot { width: 7px; height: 7px; background-color: #444446; border-radius: 50%; }
+    .empty-live-card { display: flex; align-items: center; justify-content: center; min-height: 120px; background: rgba(10, 10, 10, 0.2); border: 1px dashed rgba(255, 255, 255, 0.08); cursor: default !important; }
+    .empty-live-card:hover { transform: none !important; }
+    .empty-live-content { display: flex; flex-direction: column; align-items: center; gap: 0.8rem; text-align: center; padding: 1rem; }
+    .empty-icon { width: 28px; height: 28px; color: #444446; }
+    .empty-text { font-size: 0.82rem; color: #86868b; margin: 0; max-width: 280px; line-height: 1.4; }
+
+    .bento-seamless-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; width: 100%; box-sizing: border-box; }
+    
+    .bento-node { background: rgba(255, 255, 255, 0.01); border: 1px solid rgba(255, 255, 255, 0.04); border-radius: 14px; overflow: hidden; display: flex; flex-direction: column; width: 100%; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1); box-sizing: border-box; }
+    .bento-node:hover { transform: translateY(-4px); border-color: rgba(255, 255, 255, 0.08); }
+    
+    .media-poster-wrapper { position: relative; width: 100%; aspect-ratio: 16 / 10.5; overflow: hidden; background: #000; cursor: pointer; }
+    
+    /* POSTER AYARLARI */
+    .media-poster { display: block; width: 100%; height: 100%; object-fit: cover; opacity: 0.85; transition: opacity 0.4s ease, transform 0.4s ease; margin-bottom: -1px; vertical-align: middle; }
+    .bento-node:hover .media-poster { opacity: 0; transform: scale(1.03); }
+
+    /* HOVER BANNER (BACKDROP) AYARLARI */
+    .media-banner-hover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.4s ease, transform 0.4s ease; transform: scale(1.05); pointer-events: none; }
+    .bento-node:hover .media-banner-hover { opacity: 1; transform: scale(1); }
+
+    .hover-video-container { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; z-index: 2; overflow: hidden; background: #000; }
+    .hover-video-container.active { opacity: 1; }
+    .hover-video-container :global(iframe) { position: absolute; top: 50%; left: 50%; width: 100%; height: 100%; transform: translate(-50%, -50%) scale(1.35); object-fit: cover; pointer-events: none; }
+
+    /* ROZETLER (HER ZAMAN SABİT VE GÖRÜNÜR) */
+    .type-badge { 
+        position: absolute; 
+        top: 0.5rem; 
+        left: 0.5rem; 
+        font-family: 'JetBrains Mono', monospace; 
+        font-size: 0.6rem; 
+        padding: 0.2rem 0.5rem; 
+        border-radius: 6px; 
+        font-weight: 700; 
+        text-transform: uppercase; 
+        z-index: 20; 
+        letter-spacing: 0.04em;
+        background: rgba(15, 15, 15, 0.85);
+        color: #ffcc00; 
+        border: 1px solid rgba(255, 204, 0, 0.45);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+        opacity: 1;
+    }
+
+    .status-icon-wrapper {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        z-index: 20;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+        opacity: 1;
+    }
+    .svg-ico { width: 12px; height: 12px; }
+    
+    .watchlist-badge {
+        background: rgba(255, 159, 10, 0.16);
+        border: 1px solid rgba(255, 159, 10, 0.55);
+        color: #ff9f0a;
+        box-shadow: 0 0 12px rgba(255, 159, 10, 0.25), inset 0 0 4px rgba(255, 159, 10, 0.2);
+    }
+    .watched-badge {
+        background: rgba(48, 209, 88, 0.16);
+        border: 1px solid rgba(48, 209, 88, 0.55);
+        color: #30d158;
+        box-shadow: 0 0 12px rgba(48, 209, 88, 0.25), inset 0 0 4px rgba(48, 209, 88, 0.2);
+    }
+
+    .media-info { padding: 1rem; display: flex; flex-direction: column; gap: 0.5rem; flex-grow: 1; cursor: pointer; background: transparent; border: none; text-align: left; }
+    .media-title-row { display: flex; justify-content: space-between; align-items: center; gap: 0.4rem; }
+    .media-title { font-size: 0.9rem; font-weight: 600; color: #f5f5f7; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+    .media-rating { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: #ffd700; display: flex; align-items: center; gap: 0.2rem; }
+    .inline-star { width: 11px; height: 11px; color: #ffd700; fill: currentColor; }
+
+    .genre-pills { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+    .genre-pill { font-size: 0.65rem; color: #86868b; background: rgba(255,255,255,0.03); padding: 0.1rem 0.35rem; border-radius: 4px; border: 1px solid rgba(255,255,255,0.02); }
+    .media-note { font-size: 0.78rem; line-height: 1.4; color: #636366; margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+    /* MODAL GEOMETRİSİ */
+    .cinema-modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 1.5rem; transition: opacity 0.3s ease; }
+    .cinema-modal-overlay.hidden { opacity: 0; pointer-events: none; }
+    
+    .cinema-modal-card { background: rgba(20, 20, 22, 0.85); border: 1px solid rgba(255, 255, 255, 0.08); width: 100%; max-width: 680px; border-radius: 20px; overflow: hidden; position: relative; box-shadow: 0 30px 70px rgba(0,0,0,0.8); }
+    .close-btn { position: absolute; top: 1rem; right: 1rem; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.05); color: #86868b; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; z-index: 10; transition: color 0.2s; }
+    .close-btn:hover { color: #f5f5f7; background: rgba(0,0,0,0.6); }
+
+    .modal-hero { height: 180px; background-size: cover; background-position: center 30%; position: relative; border-bottom: 1px solid rgba(255,255,255,0.05); }
+    .modal-hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 30%, rgba(20, 20, 22, 1)); }
+
+    .modal-body { padding: 1.5rem; display: flex; gap: 1.5rem; margin-top: -80px; position: relative; z-index: 2; }
+    #modal-poster { width: 110px; aspect-ratio: 2/3; object-fit: cover; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.05); flex-shrink: 0; display: block; margin-bottom: -1px; }
+    
+    .modal-right { display: flex; flex-direction: column; gap: 0.6rem; flex-grow: 1; padding-top: 60px; }
+    .modal-header-row { display: flex; justify-content: space-between; align-items: center; }
+    #modal-title { font-size: 1.3rem; font-weight: 700; color: #f5f5f7; margin: 0; }
+    .modal-rating-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: #ffd700; background: rgba(255,215,0,0.08); padding: 0.2rem 0.5rem; border-radius: 6px; }
+    .modal-overview-text { font-size: 0.82rem; line-height: 1.5; color: #86868b; margin: 0; }
+    .modal-divider { width: 100%; height: 1px; background: rgba(255,255,255,0.05); margin: 0.3rem 0; }
+    
+    .modal-user-review h4 { font-size: 0.8rem; font-weight: 600; color: #f5f5f7; margin: 0 0 0.2rem 0; }
+    #modal-user-note { font-size: 0.82rem; line-height: 1.45; color: #aeaeb2; font-style: italic; margin: 0; }
+
+    /* RESPONSIVE TASARIM */
+    @media (max-width: 850px) {
+        .top-dashboard-wrapper { grid-template-columns: 1fr; gap: 1rem; }
+        .stats-bento-grid { grid-template-columns: 1fr 1fr; }
+        .favori-tur { grid-column: span 2; }
+        .bento-seamless-grid { grid-template-columns: repeat(2, 1fr); gap: 0.8rem; }
+    }
+    @media (max-width: 600px) {
+        .stats-bento-grid { grid-template-columns: 1fr; gap: 0.8rem; }
+        .favori-tur { grid-column: span 1; }
+        .bento-seamless-grid { grid-template-columns: 1fr; gap: 0.8rem; }
+        .live-content { flex-direction: column; align-items: flex-start; gap: 1rem; }
+        .live-poster-area { width: 60px; }
+        .modal-body { flex-direction: column; margin-top: -110px; align-items: center; text-align: center; }
+        .modal-right { padding-top: 10px; }
+        .modal-header-row { flex-direction: column; gap: 0.5rem; }
+        .genre-pills { justify-content: center; }
+    }
+</style>

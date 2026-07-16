@@ -1,0 +1,334 @@
+---
+// src/components/Navbar.astro
+const currentPath = Astro.url.pathname;
+---
+
+<div class="apple-nav-container" id="global-navbar">
+  <div class="nav-dock liquid-glass-nav">
+    <button class="dock-heart-core" id="nav-expand-btn" aria-label="Navbarı Genişlet">❤️</button>
+    
+    <div class="nav-items-wrapper">
+      {/* HOME */}
+      <a href="/" class={`nav-item ${currentPath === '/' ? 'active' : ''}`}>
+        <div class="heart-emoji-wrapper">❤️</div>
+        {currentPath === '/' && <span class="active-indicator"></span>}
+      </a>
+
+      {/* BLOG */}
+      <a href="/blog" class={`nav-item ${currentPath.startsWith('/blog') ? 'active' : ''}`}>
+        <span>Blog</span>
+        {currentPath.startsWith('/blog') && <span class="active-indicator"></span>}
+      </a>
+
+      {/* MUSIC */}
+      <a href="/music" class={`nav-item ${currentPath.startsWith('/music') ? 'active' : ''}`}>
+        <span>Müzik</span>
+        {currentPath.startsWith('/music') && <span class="active-indicator"></span>}
+      </a>
+
+      {/* DETEKTÖR / CMD TETİKLEYİCİ */}
+      <button class="nav-item cmd-trigger" id="nav-cmd-btn" aria-label="Komut Paletini Aç">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="search-icon">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span class="cmd-shortcut">⌘K</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const navbar = document.getElementById('global-navbar');
+  const expandBtn = document.getElementById('nav-expand-btn');
+  const cmdBtn = document.getElementById('nav-cmd-btn');
+  
+  let isManuallyExpanded = false;
+  let lastScrollPosOnExpand = 0;
+  let lastScrollY = 0;
+
+  // Akıllı Küçülme/Büyüme Mantığı
+  if (navbar) {
+    window.addEventListener('scroll', () => {
+      const currentScrollY = window.scrollY;
+      const isScrollingDown = currentScrollY > lastScrollY;
+
+      if (currentScrollY > 50) {
+        if (!isManuallyExpanded) {
+          navbar.classList.add('nav-collapsed');
+        } else {
+          if (isScrollingDown && (currentScrollY - lastScrollPosOnExpand > 120)) {
+            isManuallyExpanded = false;
+            navbar.classList.add('nav-collapsed');
+          }
+        }
+      } else {
+        navbar.classList.remove('nav-collapsed');
+        isManuallyExpanded = false;
+      }
+
+      lastScrollY = currentScrollY;
+    }, { passive: true });
+
+    if (expandBtn) {
+      expandBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navbar.classList.remove('nav-collapsed');
+        isManuallyExpanded = true;
+        lastScrollPosOnExpand = window.scrollY;
+      });
+    }
+  }
+
+  // CMD Paletini Tetikleme Fonksiyonu (Çakışmasız Sadece Özel Event Sinyali)
+  if (cmdBtn) {
+    cmdBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // Tıklamanın dış alanlara taşmasını engeller
+      
+      // Tek ve temiz bir sinyal gönderiyoruz
+      document.dispatchEvent(new CustomEvent('open-cmd-palette'));
+    });
+  }
+</script>
+
+<style>
+  .apple-nav-container {
+    position: fixed;
+    bottom: 2.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 99999;
+    pointer-events: none;
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+    will-change: width, height, background-color;
+  }
+
+  .nav-dock {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 22px;
+    border-radius: 30px;
+    pointer-events: auto;
+    position: relative;
+    
+    width: 340px; 
+    height: 52px;
+    overflow: hidden; 
+    
+    transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1), 
+                height 0.6s cubic-bezier(0.16, 1, 0.3, 1), 
+                border-radius 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+                background-color 0.5s ease,
+                border-color 0.5s ease,
+                box-shadow 0.5s ease;
+  }
+
+  .nav-items-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    justify-content: space-between;
+    flex-shrink: 0;
+    
+    transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.1s, 
+                transform 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.1s;
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+  }
+
+  .liquid-glass-nav {
+    background: rgba(18, 18, 20, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+  }
+
+  @keyframes heartbeat {
+    0% { transform: scale(1); }
+    14% { transform: scale(1.24); }
+    28% { transform: scale(1); }
+    42% { transform: scale(1.20); }
+    70% { transform: scale(1); }
+  }
+
+  .dock-heart-core {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+    
+    font-size: 1rem;
+    line-height: 1;
+    opacity: 0;
+    transform: scale(0);
+    pointer-events: none;
+    z-index: 2;
+    filter: drop-shadow(0 0 8px rgba(255, 45, 85, 0.6));
+    
+    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+  }
+
+  .heart-emoji-wrapper {
+    display: inline-block;
+    font-size: 0.95rem;
+    transform-origin: center;
+    filter: grayscale(1) opacity(0.5);
+    transition: filter 0.25s ease;
+  }
+
+  .nav-item:hover .heart-emoji-wrapper,
+  .nav-item.active .heart-emoji-wrapper {
+    filter: grayscale(0) opacity(1) drop-shadow(0 0 6px rgba(255, 45, 85, 0.4));
+    animation: heartbeat 1.4s infinite cubic-bezier(0.215, 0.610, 0.355, 1);
+  }
+
+  .nav-collapsed .dock-heart-core {
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
+    animation: heartbeat 1.4s infinite cubic-bezier(0.215, 0.610, 0.355, 1);
+    transition-delay: 0.08s;
+  }
+
+  .nav-item {
+    position: relative;
+    padding: 10px 10px;
+    color: #88888e;
+    font-size: 0.88rem;
+    font-weight: 500;
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color 0.25s ease, transform 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .nav-item:hover {
+    color: #ffffff;
+    transform: translateY(-1px);
+  }
+
+  .nav-item.active {
+    color: #ffffff;
+  }
+
+  .cmd-trigger {
+    flex-direction: row;
+    gap: 0.35rem;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    padding: 5px 10px;
+    border-radius: 14px;
+    transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+  }
+  
+  .cmd-trigger:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .search-icon {
+    opacity: 0.6;
+    transition: opacity 0.25s ease;
+  }
+  .cmd-trigger:hover .search-icon {
+    opacity: 1;
+  }
+
+  .cmd-shortcut {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #636366;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 1px 5px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.02);
+    transition: color 0.25s ease;
+  }
+  .cmd-trigger:hover .cmd-shortcut {
+    color: #8e8e93;
+  }
+
+  .active-indicator {
+    width: 4px;
+    height: 4px;
+    background-color: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+    position: absolute;
+    bottom: -4px;
+  }
+
+  .nav-collapsed .nav-dock {
+    width: 46px; 
+    height: 46px;
+    border-radius: 50%; 
+    padding: 0;
+    background: rgba(20, 20, 22, 0.75);
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+
+  .nav-collapsed .nav-items-wrapper {
+    opacity: 0;
+    transform: scale(0.6);
+    pointer-events: none;
+    transition: opacity 0.15s ease 0s, transform 0.15s ease 0s;
+  }
+
+  @media (max-width: 768px) {
+    .apple-nav-container {
+      bottom: 1.8rem;
+    }
+    
+    .nav-dock {
+      width: 300px;
+      height: 48px;
+      padding: 0 14px;
+    }
+    
+    .nav-item {
+      font-size: 0.85rem;
+    }
+
+    .cmd-shortcut {
+      display: none;
+    }
+    .cmd-trigger {
+      padding: 8px;
+      border-radius: 50%;
+      background: transparent;
+      border-color: transparent;
+    }
+
+    .nav-collapsed .nav-dock {
+      width: 42px;
+      height: 42px;
+    }
+  }
+</style>

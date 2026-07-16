@@ -1,0 +1,55 @@
+---
+// src/pages/music.astro
+import Layout from '../layouts/Layout.astro';
+import MusicRoom from '../components/MusicRoom.astro';
+import Footer from '../components/Footer.astro';
+
+const name = import.meta.env.PUBLIC_NAME;
+const LINKS = {
+  GITHUB: import.meta.env.LINK_GITHUB,
+  SPOTIFY: import.meta.env.LINK_SPOTIFY,
+  LINKEDIN: import.meta.env.LINK_LINKEDIN,
+  DISCORD: import.meta.env.LINK_DISCORD
+};
+---
+
+<Layout title={`${name}`}>
+    <div id="ambient-glow" class="ambient-glow"></div>
+
+    <div id="app-content" class="start-sequence">
+        <main class="minimal-container">
+            <div class="word delay-1">
+                <MusicRoom />
+            </div>
+            <div class="word delay-2">
+                <Footer name={name} links={LINKS} />
+            </div>
+        </main>
+    </div>
+</Layout>
+
+<style>
+    .minimal-container {
+        max-width: 840px;
+        width: 100%;
+        margin: 0 auto;
+        padding: 1.5rem clamp(1.2rem, 5vw, 1.5rem) 6rem clamp(1.2rem, 5vw, 1.5rem);
+        display: flex;
+        flex-direction: column;
+        gap: 2.5rem;
+    }
+
+    .word {
+        opacity: 0;
+        transform: translateY(20px);
+        transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    
+    .start-sequence .word {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    
+    .delay-1 { transition-delay: 0.1s; }
+    .delay-2 { transition-delay: 0.2s; }
+</style>

@@ -1,0 +1,182 @@
+---
+// src/components/Popup.astro
+---
+
+<div id="liquid-popup" class="popup-toast liquid-glass-popup type-info" aria-hidden="true">
+  <div class="popup-content">
+    <div class="popup-icon-wrapper" id="popup-icon-container">
+      <span id="popup-icon">✨</span>
+      <div id="popup-spinner" class="popup-spinner hidden"></div>
+    </div>
+    
+    <div class="popup-text-area">
+      <h4 class="popup-title" id="popup-title">Bildirim</h4>
+      <p class="popup-desc" id="popup-desc">Sistem mesajı.</p>
+      
+      <div id="popup-action-container" class="popup-actions hidden">
+        <button id="popup-action-btn" class="popup-action-btn">Eylem</button>
+      </div>
+    </div>
+  </div>
+  
+  <button class="popup-close-btn" id="popup-close-btn" aria-label="Kapat">
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"></line>
+      <line x1="6" y1="6" x2="18" y2="18"></line>
+    </svg>
+  </button>
+</div>
+
+<script>
+  let autoCloseTimeout: NodeJS.Timeout;
+
+  window.showPopup = function(rawOptions: any) {
+    let options: any = {
+      title: 'Bildirim',
+      desc: '',
+      type: 'info',
+      icon: '✨',
+      duration: 5000,
+      action: null
+    };
+
+    if (typeof rawOptions === 'string') {
+      options.title = arguments[0] || 'Bildirim';
+      options.desc = arguments[1] || '';
+      options.icon = arguments[2] || '✨';
+      options.duration = arguments[3] || 5000;
+    } 
+    else if (rawOptions && typeof rawOptions === 'object') {
+      options = { ...options, ...rawOptions };
+    }
+
+    const popup = document.getElementById('liquid-popup');
+    const titleEl = document.getElementById('popup-title');
+    const descEl = document.getElementById('popup-desc');
+    const iconEl = document.getElementById('popup-icon');
+    const spinnerEl = document.getElementById('popup-spinner');
+    const actionContainer = document.getElementById('popup-action-container');
+    const actionBtn = document.getElementById('popup-action-btn');
+
+    if (!popup || !titleEl || !descEl || !iconEl || !spinnerEl || !actionContainer || !actionBtn) return;
+
+    clearTimeout(autoCloseTimeout);
+
+    titleEl.textContent = options.title;
+    descEl.textContent = options.desc;
+    
+    popup.className = `popup-toast liquid-glass-popup type-${options.type}`;
+
+    if (options.type === 'loading') {
+      iconEl.classList.add('hidden');
+      spinnerEl.classList.remove('hidden');
+    } else {
+      iconEl.classList.remove('hidden');
+      spinnerEl.classList.add('hidden');
+      iconEl.textContent = options.icon;
+    }
+
+    if (options.action && options.action.label && options.action.callback) {
+      actionContainer.classList.remove('hidden');
+      actionBtn.textContent = options.action.label;
+      
+      const newActionBtn = actionBtn.cloneNode(true) as HTMLButtonElement;
+      actionBtn.parentNode?.replaceChild(newActionBtn, actionBtn);
+      
+      newActionBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        options.action.callback();
+        closePopup();
+      });
+    } else {
+      actionContainer.classList.add('hidden');
+    }
+
+    popup.setAttribute('aria-hidden', 'false');
+    popup.classList.add('is-visible');
+
+    if (options.duration > 0 && options.type !== 'loading') {
+      autoCloseTimeout = setTimeout(() => {
+        closePopup();
+      }, options.duration);
+    }
+
+    const closeBtn = document.getElementById('popup-close-btn');
+    function closePopup() {
+      popup?.classList.remove('is-visible');
+      popup?.setAttribute('aria-hidden', 'true');
+      clearTimeout(autoCloseTimeout);
+    }
+
+    closeBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closePopup();
+    }, { once: true });
+    
+    window.closePopup = closePopup;
+  };
+</script>
+
+<style>
+  .popup-toast {
+    position: fixed;
+    top: 2rem;
+    right: 2rem;
+    width: 350px;
+    padding: 16px;
+    border-radius: 16px;
+    z-index: 100000;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+    pointer-events: none;
+    visibility: hidden;
+    transition: 
+      opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+      visibility 0.4s;
+  }
+  .popup-toast.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+    visibility: visible;
+  }
+  
+  /* Tüm popup tipleri için ortak monokrom kenarlık yapısı (Renkli çizgiler kaldırıldı) */
+  .liquid-glass-popup {
+    background: rgba(18, 18, 20, 0.75);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 16px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  
+  .popup-content { display: flex; align-items: flex-start; gap: 12px; flex: 1; }
+  .popup-icon-wrapper { font-size: 1.1rem; line-height: 1; padding-top: 2px; min-width: 20px; }
+  .popup-spinner { width: 18px; height: 18px; border: 2px solid rgba(255, 255, 255, 0.1); border-top-color: #f5f5f7; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .popup-text-area { display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  .popup-title { color: #ffffff; font-size: 0.88rem; font-weight: 600; }
+  
+  .popup-desc { 
+    color: #8e8e93; 
+    font-size: 0.8rem; 
+    line-height: 1.5; 
+    white-space: pre-line; 
+    max-height: 220px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  
+  .popup-actions { margin-top: 8px; }
+  .popup-action-btn { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.05); color: #ffffff; padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 500; cursor: pointer; transition: background 0.2s, border-color 0.2s; }
+  .popup-action-btn:hover { background: rgba(255, 255, 255, 0.15); border-color: rgba(255, 255, 255, 0.1); }
+  .popup-close-btn { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.4); width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s, color 0.2s; flex-shrink: 0; }
+  .popup-close-btn:hover { background: rgba(255, 255, 255, 0.1); color: #ffffff; }
+  .hidden { display: none !important; }
+  @media (max-width: 480px) { .popup-toast { top: 1rem; right: 1rem; left: 1rem; width: auto; } }
+</style>

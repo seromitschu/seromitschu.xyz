@@ -1,0 +1,298 @@
+---
+// src/pages/blog/[...slug].astro
+import Layout from '../../layouts/Layout.astro';
+import { getCollection, getEntry, render } from 'astro:content';
+import Footer from '../../components/Footer.astro';
+import Reactions from '../../components/Reactions.astro'; // 1. Yeni Reactions bileşenini içe aktar
+
+const name = import.meta.env.PUBLIC_NAME;
+const LINKS = {
+  GITHUB: import.meta.env.LINK_GITHUB,
+  SPOTIFY: import.meta.env.LINK_SPOTIFY,
+  LINKEDIN: import.meta.env.LINK_LINKEDIN,
+  DISCORD: import.meta.env.LINK_DISCORD
+};
+
+export async function getStaticPaths() {
+  const posts = await getCollection('blog');
+  return posts.map((post) => ({
+    params: { slug: post.id },
+    props: { post },
+  }));
+}
+
+const { slug } = Astro.params;
+let { post } = Astro.props;
+
+if (!post && slug) {
+  post = await getEntry('blog', slug);
+}
+
+if (!post) {
+  return new Response(null, {
+    status: 404,
+    statusText: 'Not found'
+  });
+}
+
+const { Content } = await render(post);
+
+const formatDate = (date: Date) => {
+  return date.toLocaleDateString('tr-TR', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+};
+
+// Sayfanın benzersiz URL yolunu Supabase'de ayırıcı kimlik (ID) olarak kullanıyoruz
+const currentPath = Astro.url.pathname;
+---
+
+<Layout title={`${post.data.title} / ${name}`}>
+  {/* Index sayfasıyla aynı ambient glow ve start-sequence yapısı */}
+  <div id="ambient-glow" class="ambient-glow"></div>
+
+  <div id="app-content" class="start-sequence">
+    {/* Konteyner isimlendirmesi ve padding değerleri index.astro ile birebir eşitlendi */}
+    <main class="minimal-container">
+      
+      {/* Geri dön linki animasyon dizisinin ilk elemanı */}
+      <div class="word delay-1">
+        <a href="/blog" class="back-link">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+          <span>YAZILARA DÖN</span>
+        </a>
+      </div>
+
+      {/* Header alanı animasyon dizisinin ikinci elemanı */}
+      <div class="word delay-2">
+        <header class="post-header">
+          <div class="post-meta">
+            <time datetime={post.data.pubDate.toISOString()}>
+              {formatDate(post.data.pubDate)}
+            </time>
+            {post.data.tags && (
+              <div class="post-tags">
+                {post.data.tags.map((tag: string) => (
+                  <span>#{tag.toLowerCase()}</span>
+                ))}
+              </div>
+            )}
+          </div>
+          <h1 class="post-title">{post.data.title}</h1>
+          {post.data.description && <p class="post-subtitle">{post.data.description}</p>}
+        </header>
+        
+        <div class="post-divider"></div>
+      </div>
+
+      {/* Yazı içeriği ve Markdown gövdesi animasyon dizisinin üçüncü elemanı */}
+      <div class="word delay-3">
+        <article class="post-content markdown-body">
+          <Content />
+        </article>
+      </div>
+
+      {/* 2. Canlı Tepkiler Modülü - Animasyon dizisinin dördüncü elemanı */}
+      <div class="word delay-4">
+        <div class="post-reactions-section">
+          <Reactions contentId={currentPath} />
+        </div>
+      </div>
+
+      {/* Footer - Animasyon dizisinin beşinci elemanına kaydırıldı */}
+      <div class="word delay-5">
+        <Footer name={name} links={LINKS} />
+      </div>
+    </main>
+  </div>
+</Layout>
+
+<style is:global>
+  /* --- Index Sayfasıyla Birebir Eşitlenen Alanlar --- */
+  .minimal-container {
+    max-width: 840px;
+    width: 100%;
+    margin: 0 auto;
+    /* Index sayfasındaki padding ve gap yapısının aynısı */
+    padding: 1.5rem clamp(1.2rem, 5vw, 1.5rem) 6rem clamp(1.2rem, 5vw, 1.5rem);
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+
+  /* Giriş Animasyonları (Start Sequence) */
+  .word {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  .start-sequence .word {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  
+  .delay-1 { transition-delay: 0.1s; }
+  .delay-2 { transition-delay: 0.2s; }
+  .delay-3 { transition-delay: 0.3s; }
+  .delay-4 { transition-delay: 0.4s; } /* Tepki butonları için gecikme adımı */
+  .delay-5 { transition-delay: 0.5s; } /* Footer için güncellenen gecikme adımı */
+  /* --- ------------------------------------------ --- */
+
+  /* Geri Dönüş Linki - JetBrains Mono */
+  .back-link { 
+    display: inline-flex; 
+    align-items: center; 
+    gap: 0.6rem; 
+    color: #636366; 
+    text-decoration: none; 
+    font-family: 'JetBrains Mono', monospace; 
+    font-size: 0.65rem; 
+    font-weight: 700; 
+    letter-spacing: 0.05em;
+    transition: color 0.2s ease; 
+  }
+  .back-link:hover { 
+    color: #f5f5f7; 
+  }
+
+  /* Header Alanı */
+  .post-header { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 0.8rem; 
+  }
+  .post-meta { 
+    display: flex; 
+    align-items: center; 
+    gap: 1rem; 
+    font-family: 'JetBrains Mono', monospace; 
+    font-size: 0.65rem; 
+    color: #636366; 
+    font-weight: 600; 
+  }
+  .post-tags { 
+    display: flex; 
+    gap: 0.5rem; 
+  }
+  .post-tags span { 
+    color: #444446; 
+  }
+
+  /* Başlıklar - Inter Tight */
+  .post-title { 
+    font-family: 'Inter Tight', -apple-system, sans-serif; 
+    font-size: 2.25rem; 
+    font-weight: 700; 
+    letter-spacing: -0.04em; 
+    color: #f5f5f7; 
+    line-height: 1.15; 
+    margin: 0; 
+  }
+  .post-subtitle { 
+    font-size: 1.1rem; 
+    line-height: 1.5; 
+    color: #86868b; 
+    margin: 0; 
+    font-weight: 400; 
+    letter-spacing: -0.01em;
+  }
+
+  /* Premium İnce Ayırıcı Çizgi */
+  .post-divider { 
+    height: 1px; 
+    background: linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 80%, transparent 100%); 
+    margin-top: 2rem; 
+  }
+  
+  /* --- Markdown İçerik Tipografisi --- */
+  .markdown-body { 
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+    font-size: 0.95rem; 
+    line-height: 1.8; 
+    color: #d1d1d6; 
+  }
+  .markdown-body p { 
+    margin-top: 0; 
+    margin-bottom: 1.8rem; 
+  }
+
+  .markdown-body h2, .markdown-body h3 { 
+    font-family: 'Inter Tight', sans-serif; 
+    color: #f5f5f7; 
+    font-weight: 600; 
+    letter-spacing: -0.02em; 
+    margin-top: 3rem; 
+    margin-bottom: 1rem; 
+  }
+  .markdown-body h2 { font-size: 1.35rem; }
+  .markdown-body h3 { font-size: 1.1rem; }
+
+  /* Liquid Glass Kod Blokları */
+  .markdown-body pre { 
+    background: rgba(255, 255, 255, 0.01) !important; 
+    border: 1px solid rgba(255, 255, 255, 0.04); 
+    border-radius: 10px; 
+    padding: 1.2rem; 
+    overflow-x: auto; 
+    font-family: 'JetBrains Mono', monospace; 
+    font-size: 0.75rem; 
+    margin: 2rem 0; 
+    backdrop-filter: blur(12px); 
+    -webkit-backdrop-filter: blur(12px);
+  }
+  
+  .markdown-body code:not(pre code) { 
+    font-family: 'JetBrains Mono', monospace; 
+    font-size: 0.75rem; 
+    background: rgba(255, 255, 255, 0.05); 
+    color: #e5e5ea; 
+    padding: 0.15rem 0.35rem; 
+    border-radius: 4px; 
+    border: 1px solid rgba(255, 255, 255, 0.02);
+  }
+
+  /* Linkler - Minimalist Yeşil */
+  .markdown-body a { 
+    color: #30d158; 
+    text-decoration: none; 
+    border-bottom: 1px dashed rgba(48, 209, 88, 0.3); 
+    transition: all 0.2s ease; 
+  }
+  .markdown-body a:hover { 
+    border-bottom-style: solid; 
+    border-bottom-color: #30d158;
+  }
+
+  .markdown-body ul, .markdown-body ol { 
+    margin-top: 0; 
+    margin-bottom: 1.8rem; 
+    padding-left: 1.2rem; 
+  }
+  .markdown-body li { 
+    margin-bottom: 0.6rem; 
+  }
+
+  .markdown-body blockquote { 
+    margin: 2rem 0; 
+    padding-left: 1.2rem; 
+    border-left: 2px solid #30d158; 
+    color: #86868b; 
+    font-style: italic; 
+  }
+
+  /* Tepki Modülü İçin Ekstra Uyum Sınıfı */
+  .post-reactions-section {
+    margin-top: 1rem;
+    width: 100%;
+  }
+
+  @media (max-width: 768px) { 
+    .post-title { font-size: 1.8rem; } 
+  }
+</style>

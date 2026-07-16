@@ -1,0 +1,470 @@
+---
+// src/components/GameRoom.astro
+// Grid küçültüldü, mobil kayma hataları ve başarım barları düzeltildi, Steam API veri kontrolleri sanitize edildi.
+// MusicRoom'daki hover efektleri ve Apple tarzı transform/gölge animasyonları entegre edildi.
+---
+
+<section class="music-section word delay-8">
+    <div class="music-header-block">
+        <div class="title-area">
+            <h2 class="section-title">Oyun Odası</h2>
+        </div>
+    </div>
+
+    <div class="bento-profile-wrapper">
+        <div class="bento-profile-card liquid-glass-effect">
+            
+            <div class="profile-main-flow">
+                <div class="profile-left-container">
+                    <a id="steam-profile-link" href="#" target="_blank" class="profile-left-section">
+                        <div class="avatar-container">
+                            <img id="steam-avatar" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Avatar" class="steam-avatar-img"/>
+                            <span id="steam-status-dot" class="status-dot"></span>
+                        </div>
+                        <div class="profile-meta-info">
+                            <div class="name-row">
+                                <span id="steam-username" class="steam-name">-</span>
+                                <span id="steam-country" class="steam-country-badge" style="display: none;"></span>
+                                <span id="steam-level-badge" class="steam-level-badge" style="display: none;">-</span>
+                            </div>
+                            <div class="status-row-text">
+                                <span id="steam-status-text" class="steam-status-txt">-</span>
+                                <span id="steam-status-detailed" class="steam-status-detailed-txt"></span>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+
+                <a id="live-game-link" href="#" target="_blank" class="current-track-card-link" style="display: none;">
+                    <div class="current-track-card liquid-glass-effect">
+                        <div class="img-wrapper-live">
+                            <img id="live-game-img" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="Oyun Görseli" class="current-track-img" />
+                        </div>
+                        <div class="current-track-details">
+                            <div class="music-status">
+                                <div id="game-radar" class="game-radar">
+                                    <span class="radar-dot"></span>
+                                    <span class="radar-ring"></span>
+                                </div>
+                                <span id="live-game-status-text">YÜKLENİYOR...</span>
+                            </div>
+                            <div class="music-info">
+                                <span class="track-title" id="live-game-title">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            
+            <div class="profile-stats-section">
+                <div class="stat-item">
+                    <span class="stat-label">TOPLAM OYUN</span>
+                    <span class="stat-value" id="stat-total-games">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">GÜNLÜK ORT.</span>
+                    <span class="stat-value" id="stat-daily-average">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">TOPLAM SÜRE</span>
+                    <span class="stat-value" id="stat-total-hours">-</span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="game-room-content-layout">
+        <div class="bento-side-column">
+            <div class="bento-list-block">
+                <h3 class="subsection-title">Son 2 Hafta</h3>
+                <div class="bento-list-card liquid-glass-effect" id="recent-games-container">
+                    <div class="recent-loading">Yükleniyor...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sub-music-block">
+            <h3 class="subsection-title">Oynadığım Oyunlar</h3>
+            <div class="bento-seamless-grid" id="top-games-grid"></div>
+        </div>
+    </div>
+</section>
+
+<script>
+    let imageObserver: IntersectionObserver;
+    let pollInterval: any = null;
+
+    function initLazyLoading() {
+        if (imageObserver) imageObserver.disconnect();
+        imageObserver = new IntersectionObserver((entries, observer) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const node = entry.target as HTMLElement;
+                    const { appid, imgid } = node.dataset;
+                    if (appid && imgid) {
+                        executeSteamCoverFetch(appid, imgid);
+                    }
+                    observer.unobserve(node);
+                }
+            });
+        }, { rootMargin: '200px' });
+    }
+
+    async function executeSteamCoverFetch(appId: string, imgElementId: string) {
+        const cacheKey = `steam_cover_${appId}`;
+        const cachedUrl = localStorage.getItem(cacheKey);
+        const img = document.getElementById(imgElementId) as HTMLImageElement;
+        
+        if (!img) return;
+        if (cachedUrl) {
+            img.src = cachedUrl;
+            return;
+        }
+
+        const primaryUrl = `https://shared.akamai.shared.akamaihd.net/store_images/api/apps/${appId}/library_600x900.jpg`;
+        const fallbackUrl = `https://steamcdn-a.akamaihd.net/steam/apps/${appId}/header.jpg`;
+
+        img.src = primaryUrl;
+        img.onerror = () => {
+            img.src = fallbackUrl;
+            img.onerror = () => {
+                img.src = "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=300";
+            };
+        };
+
+        img.onload = () => {
+            if (img.src && !img.src.startsWith('data:')) {
+                localStorage.setItem(cacheKey, img.src);
+            }
+        };
+    }
+
+    function initLiquidGlassTracking() {
+        if (window.innerWidth <= 768) return;
+        const cards = document.querySelectorAll('.liquid-glass-effect, .bento-node');
+        cards.forEach(card => {
+            const el = card as HTMLElement;
+            el.addEventListener('mousemove', (e: any) => {
+                const rect = el.getBoundingClientRect();
+                el.style.setProperty('--mouse-x', `${e.clientX - rect.left}px`);
+                el.style.setProperty('--mouse-y', `${e.clientY - rect.top}px`);
+            });
+        });
+    }
+
+    async function fetchSteamData() {
+        try {
+            const res = await fetch('/api/steam');
+            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+            const data = await res.json();
+
+            if (!data) return;
+
+            // 1. Profil Bilgileri
+            if (data.profile) {
+                const avatarImg = document.getElementById('steam-avatar') as HTMLImageElement;
+                if (avatarImg) avatarImg.src = data.profile.avatar || 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+                
+                const usernameEl = document.getElementById('steam-username');
+                if (usernameEl) usernameEl.textContent = data.profile.name || '-';
+                
+                const statusTxtEl = document.getElementById('steam-status-text');
+                if (statusTxtEl) statusTxtEl.textContent = data.profile.statusText || '-';
+                
+                const detailedEl = document.getElementById('steam-status-detailed');
+                if (detailedEl) detailedEl.textContent = data.profile.statusDetailed ? ` - ${data.profile.statusDetailed}` : "";
+                
+                const dot = document.getElementById('steam-status-dot');
+                if (dot) dot.style.backgroundColor = data.profile.statusColor || '#898989';
+
+                const link = document.getElementById('steam-profile-link');
+                if (link) link.setAttribute('href', data.profile.profileUrl || '#');
+
+                const countryBadge = document.getElementById('steam-country');
+                if (countryBadge) {
+                    if (data.profile.country) {
+                        countryBadge.textContent = data.profile.country;
+                        countryBadge.style.display = 'inline-block';
+                    } else {
+                        countryBadge.style.display = 'none';
+                    }
+                }
+
+                const levelBadge = document.getElementById('steam-level-badge');
+                if (levelBadge) {
+                    if (data.profile.level) {
+                        levelBadge.textContent = `LVL ${data.profile.level}`;
+                        levelBadge.style.display = 'inline-block';
+                    } else {
+                        levelBadge.style.display = 'none';
+                    }
+                }
+            }
+
+            // 2. İstatistikler
+            if (data.stats) {
+                const totalGamesEl = document.getElementById('stat-total-games');
+                const totalHoursEl = document.getElementById('stat-total-hours');
+                const dailyAvgEl = document.getElementById('stat-daily-average');
+
+                if (totalGamesEl) totalGamesEl.textContent = data.stats.totalGames || '0';
+                if (totalHoursEl) totalHoursEl.textContent = data.stats.totalHours ? `${data.stats.totalHours}s` : '0s';
+
+                if (dailyAvgEl) {
+                    if (data.stats.playtime2WeeksTotal) {
+                        dailyAvgEl.textContent = `${(data.stats.playtime2WeeksTotal / 14).toFixed(1)}s`;
+                    } else if (data.recentGames && data.recentGames.length > 0) {
+                        const total2Weeks = data.recentGames.reduce((acc: number, game: any) => acc + (parseFloat(game.playtime2Weeks) || 0), 0);
+                        dailyAvgEl.textContent = `${(total2Weeks / 14).toFixed(1)}s`;
+                    } else {
+                        dailyAvgEl.textContent = '0.0s';
+                    }
+                }
+            }
+
+            // 3. Son Oynanan Oyunlar Listesi
+            const recentContainer = document.getElementById('recent-games-container');
+            if (recentContainer) {
+                if (data.recentGames && data.recentGames.length > 0) {
+                    let recentHtml = `<div class="side-list-wrapper">`;
+                    data.recentGames.forEach((rg: any) => {
+                        recentHtml += `
+                            <div class="side-list-item">
+                                <img src="https://steamcdn-a.akamaihd.net/steam/apps/${rg.id}/header.jpg" alt="${rg.name}" class="side-item-img" onerror="this.style.display='none'"/>
+                                <div class="side-item-meta">
+                                    <span class="side-item-name">${rg.name}</span>
+                                    <span class="side-item-sub">${rg.playtime2Weeks} saat</span>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    recentHtml += `</div>`;
+                    recentContainer.innerHTML = recentHtml;
+                } else {
+                    recentContainer.innerHTML = `<div class="recent-empty">Kayıt bulunamadı.</div>`;
+                }
+            }
+
+            // 4. Canlı/Son Aktivite Kartı Görünürlük Kontrolü
+            const linkWrapper = document.getElementById('live-game-link') as HTMLElement;
+            if (linkWrapper) {
+                if (data.statusCard && (data.statusCard.name || data.statusCard.id)) {
+                    linkWrapper.style.display = 'block';
+                    
+                    const titleEl = document.getElementById('live-game-title');
+                    if (titleEl) titleEl.textContent = data.statusCard.name || 'Bilinmeyen Oyun';
+                    
+                    linkWrapper.setAttribute('href', `https://store.steampowered.com/app/${data.statusCard.id}`);
+                    
+                    const liveImg = document.getElementById('live-game-img') as HTMLImageElement;
+                    if (liveImg) liveImg.src = `https://steamcdn-a.akamaihd.net/steam/apps/${data.statusCard.id}/header.jpg`;
+
+                    const radar = document.getElementById('game-radar');
+                    const txt = document.getElementById('live-game-status-text');
+
+                    if (data.statusCard.isLive) {
+                        radar?.classList.add('active');
+                        if (txt) { txt.textContent = "ŞU AN OYNANIYOR"; txt.style.color = "#30d158"; }
+                    } else {
+                        radar?.classList.remove('active');
+                        if (txt) { txt.textContent = "SON OYNANAN"; txt.style.color = "#86868b"; }
+                    }
+                } else {
+                    linkWrapper.style.display = 'none';
+                }
+            }
+
+            // 5. Oyun Grid Sistemi ve Başarım Barları
+            const grid = document.getElementById('top-games-grid');
+            if (grid && data.topGames && data.topGames.length > 0) {
+                initLazyLoading();
+                let htmlContent = '';
+                const defaultGameImg = "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=300";
+                
+                data.topGames.forEach((game: any, index: number) => {
+                    const imgId = `game-img-${index}`;
+                    
+                    const progressBarHtml = (game.progressPercent && game.progressPercent > 0) ? `
+                        <div class="progress-wrapper-row">
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill" style="width: ${game.progressPercent}%"></div>
+                            </div>
+                            <span class="progress-percent-text">%${game.progressPercent}</span>
+                        </div>
+                    ` : '';
+
+                    htmlContent += `
+                        <a href="https://store.steampowered.com/app/${game.id}" target="_blank" class="bento-node" title="${game.name}">
+                            <div class="bento-rank">#${index + 1}</div>
+                            <img id="${imgId}" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" onerror="this.src='${defaultGameImg}'" alt="${game.name}" class="bento-img"/>
+                            <div class="bento-overlay">
+                                <div class="bento-meta">
+                                    <span class="bento-title">${game.name}</span>
+                                    <div class="bento-sub-row">
+                                        <span class="bento-sub">${game.playtimeHours}s</span>
+                                        ${progressBarHtml}
+                                    </div>
+                                </div>
+                            </div>
+                        </a>
+                    `;
+                });
+
+                grid.innerHTML = htmlContent;
+
+                data.topGames.forEach((game: any, index: number) => {
+                    const node = grid.children[index] as HTMLElement;
+                    if (node) {
+                        node.dataset.appid = game.id;
+                        node.dataset.imgid = `game-img-${index}`;
+                        imageObserver.observe(node);
+                    }
+                });
+
+                initLiquidGlassTracking();
+            }
+        } catch (e) {
+            console.error("Steam DOM sync failed:", e);
+        }
+    }
+
+    function startPolling() {
+        fetchSteamData();
+        if (pollInterval) clearInterval(pollInterval);
+        pollInterval = setInterval(fetchSteamData, 30000);
+    }
+
+    document.addEventListener('DOMContentLoaded', startPolling);
+    document.addEventListener('astro:page-load', startPolling);
+</script>
+
+<style is:global>
+    .section-title { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.2em; font-weight: 700; color: #444446; }
+    .subsection-title { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.2em; font-weight: 700; color: #444446; margin-bottom: 1rem; }
+    .music-section { display: flex; flex-direction: column; gap: 2.5rem; width: 100%; box-sizing: border-box; }
+    .sub-music-block { width: 100%; min-width: 0; }
+    .music-header-block { display: flex; flex-direction: column; gap: 1rem; }
+    
+    .liquid-glass-effect { 
+        position: relative; 
+        background: rgba(255, 255, 255, 0.01); 
+        border: 1px solid rgba(255, 255, 255, 0.03); 
+        box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.6); 
+        backdrop-filter: blur(20px); 
+        -webkit-backdrop-filter: blur(20px); 
+        overflow: hidden; 
+        transition: border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    
+    /* Canlı/Son Aktivite Kartı Hover Link Senkronizasyonu */
+    .current-track-card-link { text-decoration: none; color: inherit; width: 100%; max-width: 340px; display: block; }
+    .current-track-card-link:hover .liquid-glass-effect { border-color: rgba(255, 255, 255, 0.08); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8); }
+
+    .bento-profile-wrapper { width: 100%; }
+    .bento-profile-card { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 1.8rem; border-radius: 14px; gap: 2rem; }
+    .profile-main-flow { display: flex; flex-direction: column; gap: 1rem; min-width: 0; flex: 1.3; width: 100%; }
+    .profile-left-container { display: flex; align-items: center; width: 100%; }
+    .profile-left-section { display: flex; align-items: center; gap: 1rem; text-decoration: none; color: inherit; min-width: 0; width: 100%; }
+    .avatar-container { position: relative; width: 50px; height: 50px; flex-shrink: 0; }
+    .steam-avatar-img { width: 100%; height: 100%; border-radius: 10px; object-fit: cover; border: 1px solid rgba(255, 255, 255, 0.08); }
+    .status-dot { position: absolute; bottom: -1px; right: -1px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid #0a0a0c; background-color: #898989; }
+    .profile-meta-info { display: flex; flex-direction: column; gap: 0.2rem; min-width: 0; flex: 1; }
+    .name-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+    .steam-name { font-size: 1.1rem; font-weight: 700; color: #f5f5f7; letter-spacing: -0.01em; }
+    .steam-country-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; font-weight: 700; color: #86868b; background: rgba(255, 255, 255, 0.05); padding: 0.1rem 0.35rem; border-radius: 4px; }
+    .steam-level-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; font-weight: 700; color: #30d158; border: 1px solid rgba(48, 209, 88, 0.25); background: rgba(48, 209, 88, 0.05); padding: 0.05rem 0.35rem; border-radius: 5px; }
+    .status-row-text { display: flex; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; font-weight: 600; color: #86868b; }
+    .steam-status-txt { text-transform: uppercase; }
+    .steam-status-detailed-txt { color: #30d158; font-family: -apple-system, BlinkMacSystemFont, sans-serif; font-weight: 500; text-transform: none; }
+    
+    .current-track-card { padding: 0.5rem 0.7rem; border-radius: 10px; width: 100%; display: flex; align-items: center; gap: 0.7rem; }
+    .img-wrapper-live { width: 38px; height: 38px; flex-shrink: 0; overflow: hidden; border-radius: 5px; }
+    .current-track-img { width: 100%; height: 100%; object-fit: cover; background: #0a0a0c; }
+    .current-track-details { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+    .music-status { display: flex; align-items: center; gap: 0.4rem; font-size: 0.52rem; font-weight: 700; color: #86868b; letter-spacing: 0.04rem; }
+    .game-radar { position: relative; width: 7px; height: 7px; display: flex; align-items: center; justify-content: center; }
+    .radar-dot { width: 4px; height: 4px; background-color: #86868b; border-radius: 50%; }
+    .radar-ring { position: absolute; width: 100%; height: 100%; border: 1px solid #86868b; border-radius: 50%; opacity: 0; scale: 0.8; }
+    .game-radar.active .radar-dot { background-color: #30d158; }
+    .game-radar.active .radar-ring { border-color: #30d158; animation: radar-pulse 1.6s cubic-bezier(0.215, 0.610, 0.355, 1) infinite; }
+    @keyframes radar-pulse { 0% { opacity: 0.8; scale: 0.6; } 100% { opacity: 0; scale: 2.4; } }
+    .track-title { font-size: 0.8rem; font-weight: 600; color: #f5f5f7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .profile-stats-section { display: flex; gap: 2rem; flex-shrink: 0; justify-content: flex-end; }
+    .stat-item { display: flex; flex-direction: column; gap: 0.1rem; min-width: 75px; }
+    .stat-label { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: #636366; letter-spacing: 0.12em; font-weight: 600; }
+    .stat-value { font-size: 1.25rem; font-weight: 700; color: #f5f5f7; letter-spacing: -0.02em; }
+    
+    .game-room-content-layout { display: grid; grid-template-columns: 230px 1fr; gap: 1.8rem; align-items: start; width: 100%; }
+    .bento-side-column { display: flex; flex-direction: column; width: 100%; min-width: 0; }
+    .bento-list-block { width: 100%; min-width: 0; }
+    .bento-list-card { border-radius: 12px; padding: 0.8rem; }
+    .recent-loading, .recent-empty { font-size: 0.65rem; color: #444446; font-family: 'JetBrains Mono', monospace; text-align: center; padding: 0.4rem 0; }
+    .side-list-wrapper { display: flex; flex-direction: column; gap: 0.7rem; }
+    .side-list-item { display: flex; align-items: center; gap: 0.65rem; min-width: 0; text-decoration: none; color: inherit; }
+    .side-item-img { width: 44px; height: 24px; object-fit: cover; border-radius: 4px; background: #0d0d0f; flex-shrink: 0; }
+    .side-item-meta { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+    .side-item-name { font-size: 0.72rem; font-weight: 600; color: #f5f5f7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .side-item-sub { font-size: 0.58rem; color: #636366; font-family: 'JetBrains Mono', monospace; }
+
+    .bento-seamless-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.6rem; width: 100%; }
+    
+    .bento-node { 
+        display: block; 
+        width: 100%; 
+        aspect-ratio: 1; 
+        overflow: hidden; 
+        position: relative; 
+        border-radius: 10px; 
+        background: #0d0d0f; 
+        border: 1px solid rgba(255, 255, 255, 0.02); 
+        text-decoration: none; 
+        transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
+    }
+    .bento-node:hover { border-color: rgba(255, 255, 255, 0.1); transform: translateY(-2px); }
+    
+    .bento-rank { position: absolute; top: 0.5rem; left: 0.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; font-weight: 700; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(4px); padding: 0.1rem 0.35rem; border-radius: 4px; color: #f5f5f7; z-index: 7; border: 1px solid rgba(255, 255, 255, 0.04); }
+    
+    .bento-img { width: 100%; height: 100%; object-fit: cover; display: block; filter: brightness(0.65); transition: filter 0.5s cubic-bezier(0.16, 1, 0.3, 1), transform 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+    .bento-node:hover .bento-img { filter: brightness(0.85); transform: scale(1.03); }
+    
+    .bento-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to top, rgba(3, 3, 4, 0.95) 0%, rgba(3, 3, 4, 0.3) 70%, rgba(3, 3, 4, 0) 100%); display: flex; align-items: flex-end; padding: 0.65rem; z-index: 6; }
+    .bento-meta { display: flex; flex-direction: column; gap: 0.15rem; width: 100%; min-width: 0; }
+    .bento-title { font-size: 0.7rem; font-weight: 600; color: #f5f5f7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    
+    .bento-sub-row { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; width: 100%; }
+    .bento-sub { font-size: 0.55rem; font-weight: 500; color: #636366; font-family: 'JetBrains Mono', monospace; }
+    .progress-wrapper-row { display: flex; align-items: center; gap: 0.3rem; flex: 1; justify-content: flex-end; min-width: 0; }
+    .progress-bar-container { width: 100%; max-width: 45px; height: 3px; background: rgba(255, 255, 255, 0.1); border-radius: 2px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: #30d158; border-radius: 2px; }
+    .progress-percent-text { font-family: 'JetBrains Mono', monospace; font-size: 0.5rem; color: #86868b; font-weight: 600; flex-shrink: 0; }
+    
+    .liquid-glass-effect::before, .bento-node::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(600px circle at var(--mouse-x, -999px) var(--mouse-y, -999px), rgba(255, 255, 255, 0.03), transparent 40%); z-index: 3; pointer-events: none; }
+
+    @media (max-width: 1024px) { 
+        .game-room-content-layout { grid-template-columns: 1fr; gap: 2rem; } 
+        .side-list-wrapper { flex-direction: row; overflow-x: auto; gap: 0.8rem; padding-bottom: 0.3rem; scrollbar-width: none; } 
+        .side-list-wrapper::-webkit-scrollbar { display: none; } 
+        .side-list-item { flex-shrink: 0; width: 160px; background: rgba(255, 255, 255, 0.01); padding: 0.4rem; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.02); } 
+    }
+    
+    @media (max-width: 768px) { 
+        .bento-profile-card { flex-direction: column; align-items: flex-start; gap: 1.25rem; padding: 1.2rem; } 
+        .profile-main-flow { width: 100%; } 
+        .profile-stats-section { width: 100%; display: flex; flex-wrap: wrap; gap: 1rem; border-top: 1px solid rgba(255, 255, 255, 0.04); padding-top: 1rem; justify-content: space-between; text-align: left; } 
+        .stat-item { min-width: 65px; flex: 1; } 
+        .stat-value { font-size: 1.15rem; } 
+        .current-track-card-link { max-width: 100%; } 
+    }
+
+    @media (max-width: 480px) { 
+        .bento-seamless-grid { grid-template-columns: repeat(auto-fill, minmax(95px, 1fr)); gap: 0.5rem; } 
+        .bento-overlay { padding: 0.5rem; }
+        .bento-title { font-size: 0.65rem; }
+        .bento-sub { font-size: 0.52rem; }
+        .progress-bar-container { max-width: 30px; }
+        .bento-node:hover { transform: none !important; }
+        .bento-node:hover .bento-img { transform: none !important; }
+    }
+</style>
