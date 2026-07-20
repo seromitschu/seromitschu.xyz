@@ -35,6 +35,20 @@
     "my_note": "Dövüş kulübünün ilk kuralı..."
   },
   {
+    "id": 27275,
+    "type": "movie",
+    "my_rating": "9.4",
+    "status": "watched",
+    "my_note": "Komutan Logar, bir cisim yaklaşıyor efendim!"
+  },
+  {
+    "id": 24426,
+    "type": "movie",
+    "my_rating": "9.2",
+    "status": "watched",
+    "my_note": "Maymundan gelmiyoruz ama maymuna gidiyoruz...!!!!"
+  },
+  {
     "id": 157336,
     "type": "movie",
     "my_rating": "-",
