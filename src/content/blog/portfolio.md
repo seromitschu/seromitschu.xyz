@@ -63,10 +63,4 @@ Kodlara göz atmak istersen: **[github.com/seromitschu/seromitschu.xyz](https://
   <img src="https://img.shields.io/github/last-commit/seromitschu/seromitschu.xyz?style=for-the-badge&color=f5f5f7&labelColor=0b0b0c" alt="Last commit" />
 </p>
 
-<p align="left">
-  <img src="https://github-readme-stats.vercel.app/api/pin/?username=seromitschu&repo=seromitschu.xyz&theme=dark_dimmed&hide_border=true" alt="Repo kartı" />
-</p>
-
----
-
 *Sorunuz ya da geri bildiriminiz varsa Guestbook'a bir not bırakabilir ya da benimle doğrudan iletişime geçebilirsiniz.*
