@@ -1,7 +1,7 @@
 ---
 title: "seromitschu.xyz: Kişisel Portfolyomu Bir 'Ev'e Dönüştürmek"
 description: "Astro, Supabase, Steam, GitHub ve Spotify API katmanlarıyla örülmüş, yüksek kontrastlı sıvı cam estetiğine sahip kişisel bir dijital sığınağın uçtan uca mimari incelemesi."
-date: 2026-07-30
+pubDate: 2026-07-30
 tags: [astro, portfolyo, web-development, typescript]
 ---
 
