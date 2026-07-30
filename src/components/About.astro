@@ -1,12 +1,14 @@
 ---
 // src/components/About.astro
+// Not: Bu bileşenin düzgün çalışması için Three.js kütüphanesinin projenize eklenmiş olması gerekmektedir.
+// Kendi 3D modelinizi (JUNGLE SAFARI kazaklı çocuk) oluşturup 'public/models/memoji_child.glb' yoluna koymalısınız.
 ---
 
 <section class="about-section word delay-6">
     <h2 class="section-title">Hakkımda</h2>
     
     <div class="about-layout">
-        <!-- SOL TARAF: Mobil ve Masaüstü Uyumlu Akışkan Metin Alanı -->
+        <!-- SOL TARAF: Metin Alanı (Yaş Sayacı ile) -->
         <div class="about-text">
             <p>
                 Tasarım ve kodun kesiştiği noktada, insanı yormayan temiz arayüzler üretmeye odaklanıyorum. 
@@ -15,45 +17,36 @@
             </p>
         </div>
 
-        <!-- SAĞ TARAF: Tamamen Telefon ve Masaüstü Uyumlu Bütünleşik Apple Widget'ı -->
-        <div class="apple-widget-container">
-            <!-- Üst Katman: Harita Bölümü -->
-            <div class="apple-map-card">
-                <!-- public/apple-samsun-map.png görselin -->
-                <div class="map-image-layer"></div>
-                <div class="map-overlay"></div>
-                
-                <a href="https://maps.apple.com/?q=Samsun" target="_blank" rel="noopener noreferrer" class="map-interactive-overlay">
-                </a>
+        <!-- SAĞ TARAF: Tamamen 3D ve Fare Takibi Yapan Karakter Kapsayıcısı -->
+        <div class="memoji-container-widget">
+            <div class="memoji-3d-wrapper">
+                <!-- 3D MODELİ BURAYA YÜKLEMEK İÇİN CANVAS -->
+                <div id="memoji-3d-canvas"></div>
             </div>
             
-            <!-- Alt Katman: Boşluğu Dolduran Hava Durumu & Saat Paneli -->
-            <div class="widget-status-bar">
-                    <div class="map-content">
-                        <div class="location-marker">
-                            <div class="pulse-ring"></div>
-                            <div class="marker-dot"></div>
-                        </div>
-                        <div class="location-info">
-                            <span class="city-name">Samsun</span>
-                            <span class="country-name">Türkiye</span>
-                        </div>
-                    </div>
-                
-                <!-- Canlı Akışkan Saat -->
-                <div class="local-time">
-                    <span class="time-label">YEREL SAAT</span>
-                    <span id="live-clock">00:00:00</span>
-                </div>
-            </div>
+            <!-- Alt Paneli Kaldırıldı -->
         </div>
     </div>
 </section>
 
+<!-- THREE.JS KÜTÜPHANESİ VE YÜKLEYİCİLER - Projenizde yüklü değilse ekleyin -->
+<!-- Not: Üretim ortamında cdn yerine npm paketleri kullanılması önerilir -->
+<script is:inline src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
+<script is:inline src="https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/loaders/GLTFLoader.min.js"></script>
+
 <script is:inline>
-    function initResponsiveWidgets() {
+    // --- BİLEŞEN BAŞLATMA ---
+    function initAboutComponent() {
+        // 1. Yaş Sayaç Mantığı
+        initCounters();
+        
+        // 2. Three.js 3D Model Yükleme ve Takip Mantığı
+        initThreeJS();
+    }
+
+    // --- SAYAÇLAR ---
+    function initCounters() {
         const ageEl = document.getElementById('age-number');
-        const clockEl = document.getElementById('live-clock');
         const birthDate = new Date('2006-01-23T00:00:00').getTime();
 
         function updateAge() {
@@ -64,34 +57,92 @@
             ageEl.textContent = ageInYears.toFixed(9);
         }
 
-        function updateClock() {
-            if (!clockEl) return;
-            const now = new Date();
-            clockEl.textContent = now.toLocaleTimeString('tr-TR', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            });
-        }
-
-        // SPA geçiş korumaları
+        // SPA geçişleri için temizleme
         if (window.aboutAgeInterval) clearInterval(window.aboutAgeInterval);
-        if (window.aboutClockInterval) clearInterval(window.aboutClockInterval);
-
-        window.aboutAgeInterval = setInterval(updateAge, 50);
-        window.aboutClockInterval = setInterval(updateClock, 1000);
         
-        updateAge();
-        updateClock();
+        window.aboutAgeInterval = setInterval(updateAge, 50);
+        
+        updateAge(); 
     }
 
-    document.addEventListener("DOMContentLoaded", initResponsiveWidgets);
-    document.addEventListener("astro:page-load", initResponsiveWidgets);
+    // --- THREE.JS 3D KARAKTER VE TAKİP ---
+    function initThreeJS() {
+        const container = document.getElementById('memoji-3d-canvas');
+        if (!container || !window.THREE) {
+            console.warn("3D konteyner veya Three.js bulunamadı. Model yüklenemedi.");
+            return;
+        }
+
+        // 1. Sahne ve Kamera Ayarları
+        const scene = new window.THREE.Scene();
+        scene.background = null; // Saydam arka plan
+
+        const camera = new window.THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+        camera.position.set(0, 0, 3); // Kamerayı karakterden biraz uzağa yerleştir
+
+        // 2. Renderer Ayarları
+        const renderer = new window.THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(200, 200); // Kapsayıcı boyutuna göre ayarla
+        renderer.setPixelRatio(window.devicePixelRatio); // Yüksek çözünürlüklü ekranlar için
+        container.appendChild(renderer.domElement);
+
+        // 3. Aydınlatma
+        const ambientLight = new window.THREE.AmbientLight(0xffffff, 0.6); // Genel yumuşak ışık
+        scene.add(ambientLight);
+        const directionalLight = new window.THREE.DirectionalLight(0xffffff, 1); // Yönlü sert ışık
+        directionalLight.position.set(1, 2, 3);
+        scene.add(directionalLight);
+
+        // 4. 3D Modeli Yükle (GLTF/GLB)
+        const loader = new window.THREE.GLTFLoader();
+        let model = null;
+
+        // ÖNEMLİ: Kendi 'memoji_child.glb' modelinizi public/models/ altına koyun.
+        loader.load('/models/memoji_child.glb', (gltf) => {
+            model = gltf.scene;
+            scene.add(model);
+            
+            // Modeli ortala ve ölçeklendir
+            model.scale.set(1, 1, 1); // Model boyutuna göre ayarlayın
+            model.position.set(0, -0.5, 0); // Modeli biraz aşağı kaydır
+            console.log("3D Model başarıyla yüklendi.");
+        }, undefined, (error) => {
+            console.error("3D Model yüklenirken hata oluştu. Dosya yolunu ve dosyanın varlığını kontrol edin:", error);
+        });
+
+        // 5. Fare Takip Olayı
+        const mouseHandler = (e) => {
+            if (!model) return;
+
+            // Fare koordinatlarını -1 ve 1 arasına ölçekle
+            const x = (e.clientX / window.innerWidth) * 2 - 1;
+            const y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            // Kafa Takibi: Modelin rotasyonunu fareye göre ayarla (LERP ile yumuşak geçiş)
+            model.rotation.y = window.THREE.MathUtils.lerp(model.rotation.y, x * 0.4, 0.1); // Sağa/sola
+            model.rotation.x = window.THREE.MathUtils.lerp(model.rotation.x, y * 0.3, 0.1); // Yukarı/aşağı
+        };
+
+        // 6. Animasyon Döngüsü
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        // Başlatma
+        if (window.innerWidth > 768) {
+            document.addEventListener('mousemove', mouseHandler);
+        }
+        animate();
+    }
+
+    // Astro sayfa yükleme olaylarını dinle
+    document.addEventListener("DOMContentLoaded", initAboutComponent);
+    document.addEventListener("astro:page-load", initAboutComponent);
 </script>
 
 <style>
-    /* Temel Bölüm Ayarları */
+    /* --- TEMEL BÖLÜM AYARLARI --- */
     .about-section {
         width: 100%;
         display: flex;
@@ -109,14 +160,15 @@
         margin-bottom: 0.1rem;
     }
 
-    /* Gelişmiş Responsive Grid Düzeni */
+    /* --- RESPONSIVE GRID DÜZENİ --- */
     .about-layout {
         display: grid;
-        grid-template-columns: 1fr 320px; /* Masaüstünde yan yana kusursuz dağılım */
+        grid-template-columns: 1fr 240px; /* 3D karakter için alan ayır */
         gap: 2.5rem;
-        align-items: flex-start;
+        align-items: center;
     }
 
+    /* --- METİN ALANI STİLLERİ --- */
     .about-text p { 
         font-size: 1rem; 
         line-height: 1.8; 
@@ -125,11 +177,11 @@
         margin: 0;
     }
 
-    /* Metin İçi Sayacın Kararlı Tasarımı */
+    /* Canlı Yaş Sayacı */
     .age-inline-wrapper {
         color: #ffffff;
         font-weight: 500;
-        white-space: nowrap; /* Sayıların mobilde alakasız yerlerden kırılmasını önler */
+        white-space: nowrap;
     }
 
     #age-number {
@@ -141,203 +193,60 @@
         -webkit-text-fill-color: transparent;
     }
 
-    /* TELEFON UYUMLU INTEGRATED APPLE KAPSAYICI */
-    .apple-widget-container {
+    /* --- 3D KARAKTER WIDGET STİLLERİ --- */
+    .memoji-container-widget {
         display: flex;
         flex-direction: column;
-        width: 100%;
-        max-width: 320px;
-        gap: 4px; /* iOS 26 standardı ultra dar ara boşluk */
-        transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-        margin: 0 auto; /* Mobilde ortalanması gerekirse pürüzsüz durur */
-    }
-
-    /* iOS Liquid Glass Hover Efekti */
-    .apple-widget-container:hover {
-        transform: scale(1.012) translateY(-1px);
-    }
-
-    /* Üst Harita Bloğu */
-    .apple-map-card {
-        position: relative;
-        width: 100%;
-        height: 120px;
-        background: #1c1c1e;
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 16px 16px 6px 6px; /* Alt panelle bütünleşik geçiş */
-        overflow: hidden;
-    }
-
-    .map-image-layer {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-image: url('/samsun.png');
-        background-size: cover;
-        background-position: center 65%;
-    }
-
-    .map-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.06);
-        pointer-events: none;
-    }
-
-    .map-interactive-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: flex-end;
-        padding: 10px;
-        text-decoration: none;
-        z-index: 2;
-    }
-
-    .map-content {
-        display: flex;
         align-items: center;
-        gap: 9px;
-        background: rgba(28, 28, 30, 0.75);
-        backdrop-filter: blur(20px);
-        -webkit-backdrop-filter: blur(20px);
-        padding: 5px 12px;
-        border-radius: 10px;
-        border: 1px solid rgba(255, 255, 255, 0.04);
-        width: auto;
     }
 
-    /* Mavi Apple Konum Pini */
-    .location-marker {
-        position: relative;
-        width: 10px;
-        height: 10px;
+    .memoji-3d-wrapper {
+        width: 100%;
+        height: 240px; /* Dik saçlar için daha fazla yükseklik */
         display: flex;
-        align-items: center;
         justify-content: center;
-    }
-
-    .marker-dot {
-        width: 8px;
-        height: 8px;
-        background-color: #0a84ff;
-        border-radius: 50%;
-        border: 1.5px solid #ffffff;
-        box-shadow: 0 0 10px rgba(10, 132, 255, 1);
-        z-index: 2;
-    }
-
-    .pulse-ring {
-        position: absolute;
-        width: 22px;
-        height: 22px;
-        border-radius: 50%;
-        background-color: rgba(10, 132, 255, 0.25);
-        animation: mapPulse 3s cubic-bezier(0.16, 1, 0.3, 1) infinite;
-        z-index: 1;
-    }
-
-    @keyframes mapPulse {
-        0% { transform: scale(0.5); opacity: 0.9; }
-        100% { transform: scale(2.4); opacity: 0; }
-    }
-
-    .location-info {
-        display: flex;
-        flex-direction: column;
-        line-height: 1.15;
-    }
-
-    .city-name {
-        color: #ffffff;
-        font-size: 0.8rem;
-        font-weight: 600;
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-
-    .country-name {
-        color: #86868b;
-        font-size: 0.65rem;
-        font-weight: 400;
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-
-    /* Alt Durum Şeridi (Boşluk Doldurucu) */
-    .widget-status-bar {
-        width: 100%;
-        background: #1c1c1e;
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 6px 6px 16px 16px; /* Alt köşeleri kapatan iOS kavisi */
-        padding: 10px 14px;
-        display: flex;
-        justify-content: space-between;
         align-items: center;
+        perspective: 1000px; /* Perspektif derinlik katma */
     }
 
-    .weather-mini {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 0.72rem;
-        color: #86868b;
-        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-        font-weight: 400;
+    /* 3D Modelin Yüklendiği Canvas Konteyneri */
+    #memoji-3d-canvas {
+        width: 200px;
+        height: 200px;
+        display: block;
+        transition: transform 0.1s ease-out; /* Fare takibi için yumuşak geçiş */
+        will-change: transform;
+        transform-style: preserve-3d;
+        /* Hafif doğal gölge ile derinlik katma */
+        filter: drop-shadow(0 15px 30px rgba(0, 0, 0, 0.4));
     }
 
-    .weather-icon {
-        width: 11px;
-        height: 11px;
-        color: #ffd60a;
-    }
-
-    .local-time {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        line-height: 1.2;
-    }
-
-    .time-label {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.52rem;
-        color: #636366;
-        letter-spacing: 0.05em;
-        font-weight: 700;
-    }
-
-    #live-clock {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.75rem;
-        color: #ffffff;
-        font-weight: 500;
-    }
-
-    /* TELEFON / MOBIL ERAN OPTİMİZASYONU (Sıkı Kurallar) */
+    /* --- MOBİL OPTİMİZASYONU --- */
     @media (max-width: 768px) {
         .about-layout {
-            grid-template-columns: 1fr; /* Mobilde her şeyi dikey akışa zorlar */
-            gap: 1.5rem; /* Gereksiz büyük boşlukları daraltır */
+            grid-template-columns: 1fr; /* Mobilde dikey akış */
+            gap: 1.5rem;
         }
-        
-        .apple-widget-container {
-            max-width: 100%; /* Telefon ekranlarında sağdan soldan taşmayı tamamen önler, tam genişlik kazanır */
+
+        .memoji-3d-wrapper {
+            justify-content: center;
+            margin-top: 0.5rem;
+            perspective: none; /* Mobilde 3D takibi kapat */
+        }
+
+        #memoji-3d-canvas {
+            width: 160px; /* Mobilde küçült */
+            height: 160px;
+            transition: none; /* Mobilde takibi kapat */
         }
 
         .about-text p {
-            font-size: 0.95rem; /* Küçük ekranlarda daha konforlu okuma boyutu */
+            font-size: 0.95rem; /* Daha konforlu okuma */
             line-height: 1.7;
         }
     }
 
-    /* Animasyon Girişleri */
+    /* --- GİRİŞ ANİMASYONLARI --- */
     .word {
         display: inline-block;
         opacity: 0;
